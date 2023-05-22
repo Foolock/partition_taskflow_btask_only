@@ -56,6 +56,7 @@ class Timer {
       std::cerr << "cluster_runtime : " << cluster_runtime << "\n";
       std::cerr << "partition_runtime : " << partition_runtime << "\n";
       std::cerr << "process_cluster_runtime : " << process_cluster_runtime << "\n";
+      std::cerr << "partitioned_execution_runtime : " << execution_runtime << "\n";
     }
 
     // Builder
@@ -348,7 +349,10 @@ class Timer {
 
     // partition_runtime
     size_t partition_runtime = 0;
-    
+   
+    // partitioned _taskflow execution time
+    size_t execution_runtime = 0;
+
     // pins of sink tasks in btask and ftask _taskflow
     std::vector<Pin*> _bsink_pins;
     std::vector<Pin*> _fsink_pins;
@@ -373,6 +377,10 @@ class Timer {
     std::vector<int> _fpartition;
     std::vector<int> _bpartition;
 
+    // topologically sorted from top to bottom of unpartitioned _taskflow pins of each partition
+    std::vector<std::vector<Pin*>> _ftopo_partitioned_pins;
+    std::vector<std::vector<Pin*>> _btopo_partitioned_pins;
+
     // mt-kahypar partition parameters
     const mt_kahypar_partition_id_t _set_num_partition = 16; // number of partitions 
     const double _im = 0.03; // imbalance parameter
@@ -395,6 +403,12 @@ class Timer {
     
     // process clusters: classify clusters into node and edge clusters and get their weights
     void _process_clusters();
+
+    // get topological order of partitioned tasks
+    void _get_topo_order();
+
+    // build partitioned _taskflow 
+    void _build_partitioned_taskflow(); 
 
     // helper: print binary form of uint32
     void _bin_uint32(uint32_t n) const;

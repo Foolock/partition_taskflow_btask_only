@@ -1984,17 +1984,8 @@ void Timer::_get_fpartitions() {
    * ----------------------------------------------------
    */
   // these 2 are not accurate, there will be missing nodes and edges which will be added below
-  const mt_kahypar_hypernode_id_t fnum_nodes = _fnode_clusters_indices.size();
-  const mt_kahypar_hyperedge_id_t fnum_hyperedges = _fedge_clusters_indices.size();
-
-  /*
-   * store a std::vector<Pin*> map representing the mapping between a pin id to a hypergraph node id(0 -> num_nodes-1),
-   * this pin belongs to a node cluster
-   */
-  std::vector<Pin*> fmap_cone_to_node;
-  for(const auto& cluster : _fnode_clusters) {
-    fmap_cone_to_node.push_back(cluster[0]);
-  }
+  mt_kahypar_hypernode_id_t fnum_nodes = _fnode_clusters_indices.size();
+  mt_kahypar_hyperedge_id_t fnum_hyperedges = _fedge_clusters_indices.size();
 
   /* 
    * traverse edge_clusters, check if a pin of an edge cluster has the same cone id as the pin in map_cone_to_node
@@ -2109,6 +2100,7 @@ void Timer::_get_fpartitions() {
     if(num_partition > _fsink_pins.size()) {
       num_partition = _fsink_pins.size();
     }
+    fnum_hyperedges += scan_result.size();
     // Construct hypergraph for DEFAULT preset
     mt_kahypar_hypergraph_t hypergraph =
       mt_kahypar_create_hypergraph(DEFAULT, fnum_nodes, fnum_hyperedges,
@@ -2181,6 +2173,7 @@ void Timer::_get_fpartitions() {
     if(num_partition > _fsink_pins.size()) {
       num_partition = _fsink_pins.size();
     }
+    fnum_hyperedges = fnum_nodes;
     // Construct hypergraph for DEFAULT preset
     mt_kahypar_hypergraph_t hypergraph =
       mt_kahypar_create_hypergraph(DEFAULT, fnum_nodes, fnum_hyperedges,
@@ -2225,7 +2218,7 @@ void Timer::_get_fpartitions() {
     if(cluster.size() > 1) {
       for(size_t i=1; i<cluster.size(); i++) {
         // notice that here pins in _fprop_cands will also be assigned with _bpartition_id
-        cluster[i]->_fpartition_id = cluster[i-1]->_bpartition_id;
+        cluster[i]->_fpartition_id = cluster[i-1]->_fpartition_id;
       }
     }
   }
@@ -2243,6 +2236,259 @@ void Timer::_get_fpartitions() {
 
 void Timer::_get_bpartitions() {
 
+  /* ----------------------------------------------------
+   * get _fpartition 
+   * ----------------------------------------------------
+   */
+  // these 2 are not accurate, there will be missing nodes and edges which will be added below
+  mt_kahypar_hypernode_id_t bnum_nodes = _bnode_clusters_indices.size();
+  mt_kahypar_hyperedge_id_t bnum_hyperedges = _bedge_clusters_indices.size();
+
+  /*
+   * traverse edge_clusters, check if a pin of an edge cluster has the same cone id as the pin in map_cone_to_node
+   * 1. a cone_id of a pin in edge clusters will actually include more than one cone id of a pin in node clusters by definition
+   *    so we use a bit series with only one bit = 1 to scan this edge cone_id to get node cone_id
+   */
+  std::vector<size_t> beind;
+  std::vector<size_t> beptr(bnum_hyperedges+1, 0);
+  if(_bedge_clusters.size() > 0) { // there could be no edge_clusters
+    for(size_t index=0; index<_bedge_clusters.size(); index++) {
+      
+      // get edge cone_id
+      auto pin = _bedge_clusters[index][0];
+      std::vector<uint32_t> cone_id = pin->_bcone_id;
+
+      // scan edge cone_id to get node cone_id, this nested for-loop is so redundent???????
+      std::vector<uint32_t> scan(cone_id.size());
+      for(size_t next_uint=0; next_uint<cone_id.size(); next_uint++) {
+        for(size_t leftshift_count=0; leftshift_count<32; leftshift_count++) {
+          scan[next_uint] = 1 << leftshift_count;
+          uint32_t result = scan[next_uint] & cone_id[next_uint];
+          if(result != 0) { // means a node cone id is found
+            // then go to map_cone_to_node to find which pin->_fcone_id[next_uint] == result, once found, add its location
+            // in map_cone_to_node to hyperedges, only check _fcone_id cuz cone_id for node clusters are all _bcone_id
+            // update: no need to use map_cone_to_node here anymore cuz I sort the node_clusters and node_cluster_indices
+            beind.push_back(leftshift_count + 32*next_uint);
+            beptr[index+1]++;
+          }
+        }
+      }
+    }
+    /*
+     * there may be a case where there is a isolated small graph with only one sink pin in the original _taskflow
+     * in this case, this small graph is a node cluster, it will appear in the _pin_clusters but there will be no
+     * pins in edge_clusters whose cone id includes this node cluster
+     * we need to check if there is(yes sir) such a case after we construct eptr and eind normally
+     */
+    // traverse edge_clusters
+    std::vector<uint32_t> bbit_checker = _bedge_clusters[0][0]->_bcone_id; // checker to see if there is such a node cluster mentioned above
+    size_t num_uint32 = bbit_checker.size();
+    for(const auto& cluster : _bedge_clusters) {
+      for(size_t i=0; i<num_uint32; i++) {
+        bbit_checker[i] = bbit_checker[i] | cluster[0]->_bcone_id[i];
+      }
+    }
+    // from LSB to _sink_pins.size(), check if each bit is 1, if not, record its location
+    std::vector<uint32_t> scan_result;
+    std::vector<uint32_t> scan_bit(bbit_checker.size());
+    size_t scan_uint = 0; // start scanning from 0 to bit_checker.size()-1 uint32
+    for(size_t ls=0; ls<_bsink_pins.size(); ls++) { // use ls(left shift) scanner
+      scan_bit[scan_uint] = 1 << (ls % 32);
+      assert(scan_uint <= bbit_checker.size());
+      if((bbit_checker[scan_uint] & scan_bit[scan_uint]) != scan_bit[scan_uint]) { // find a standalone node cluster
+        scan_result.push_back(ls); // store the location of "0" in bit_checker (within _sink_pins.size())
+      }
+      if((ls % 32 == 0)&&(ls != 0)) { // once finish scanning an uint32_t, go to next one
+        scan_uint++;
+      }
+    }
+    /* ----------------------------------------------------
+     * get hyperedges and hyperedge_indices
+     * ----------------------------------------------------
+     */
+    std::unique_ptr<mt_kahypar_hyperedge_id_t[]> hyperedges = std::make_unique<mt_kahypar_hyperedge_id_t[]>(beind.size() + scan_result.size());
+    for(size_t i=0; i<beind.size(); i++) {
+      hyperedges[i] = beind[i];
+    }
+    // add the standalone node cluster as one hyperedge
+    for(size_t i=0; i<scan_result.size(); i++) {
+      hyperedges[beind.size()+i] = scan_result[i];
+    }
+    // same concept as eptr in hmetis
+    std::unique_ptr<size_t[]> hyperedge_indices = std::make_unique<size_t[]>(_bedge_clusters_indices.size() + 1 + scan_result.size());
+    hyperedge_indices[0] = 0;
+    for(size_t i=1; i<beptr.size(); i++) {
+      beptr[i] += beptr[i-1];
+      hyperedge_indices[i] = beptr[i];
+    }
+    // add the standalone node cluster as one hyperedge
+    if(scan_result.size() != 0) {
+      for(size_t i=1; i<=scan_result.size(); i++) {
+        hyperedge_indices[beptr.size()-1+i] = hyperedge_indices[beptr.size()-1+i-1] + 1;
+      }
+    }
+    /* ----------------------------------------------------
+     * get node_weights
+     * ----------------------------------------------------
+     */
+    std::unique_ptr<mt_kahypar_hypernode_weight_t[]> node_weights =
+    std::make_unique<mt_kahypar_hypernode_weight_t[]>(bnum_nodes);
+    for(size_t index=0; index<_bnode_clusters_indices.size(); index++) {
+      node_weights[index] = _bpin_clusters_weights[_bnode_clusters_indices[index]];
+    }
+    /* ----------------------------------------------------
+     * get hyperedge_weights
+     * ----------------------------------------------------
+     */
+    std::unique_ptr<mt_kahypar_hyperedge_weight_t[]> hyperedge_weights =
+      std::make_unique<mt_kahypar_hyperedge_weight_t[]>(_bedge_clusters_indices.size() + scan_result.size());
+    for(size_t index=0; index<_bedge_clusters_indices.size(); index++) {
+      hyperedge_weights[index] = _bpin_clusters_weights[_bedge_clusters_indices[index]];
+    }
+    // add the standalone node cluster as one hyperedge
+    for(size_t i=0; i<scan_result.size(); i++) {
+      hyperedge_weights[_bedge_clusters_indices.size()+i] = _bpin_clusters_weights[_bnode_clusters_indices[scan_result[i]]];
+    }
+    /* ----------------------------------------------------
+     * do partition
+     * ----------------------------------------------------
+     */
+    mt_kahypar_partition_id_t num_partition = _set_num_partition;
+    if(num_partition > _bsink_pins.size()) {
+      num_partition = _bsink_pins.size();
+    }
+    bnum_hyperedges += scan_result.size();
+    // Construct hypergraph for DEFAULT preset
+    mt_kahypar_hypergraph_t hypergraph =
+      mt_kahypar_create_hypergraph(DEFAULT, bnum_nodes, bnum_hyperedges,
+        hyperedge_indices.get(), hyperedges.get(),
+        hyperedge_weights.get(), node_weights.get());
+    // Setup partitioning context
+    mt_kahypar_context_t* context = mt_kahypar_context_new();
+    mt_kahypar_load_preset(context, DEFAULT /* corresponds to MT-KaHyPar-D */);
+    // In the following, we partition a hypergraph into two blocks
+    // with an allowed imbalance of 3% and optimize the connective metric (KM1)
+    mt_kahypar_set_partitioning_parameters(context,
+      num_partition /* number of blocks */, _im /* imbalance parameter */,
+      KM1 /* objective function */, 42 /* seed */);
+    // Enable logging
+    mt_kahypar_set_context_parameter(context, VERBOSE, "1");
+    // Partition Hypergraph
+    mt_kahypar_partitioned_hypergraph_t partitioned_hg =
+      mt_kahypar_partition(hypergraph, context);
+    // Extract Partition
+    std::unique_ptr<mt_kahypar_partition_id_t[]> partition =
+      std::make_unique<mt_kahypar_partition_id_t[]>(mt_kahypar_num_hypernodes(hypergraph));
+    mt_kahypar_get_partition(partitioned_hg, partition.get());
+    for(size_t i=0; i<mt_kahypar_num_hypernodes(hypergraph); i++) {
+      std::cout << partition[i] << " ";
+      _bpartition.push_back(partition[i]);
+    }
+    mt_kahypar_free_context(context);
+    mt_kahypar_free_hypergraph(hypergraph);
+    mt_kahypar_free_partitioned_hypergraph(partitioned_hg);
+  }
+  else { // if there is no edge clusters
+    /* ----------------------------------------------------
+     * get hyperedges and hyperedge_indices 
+     * ----------------------------------------------------
+     */
+    // now every node cluster is a hyperedge
+    std::unique_ptr<mt_kahypar_hyperedge_id_t[]> hyperedges = std::make_unique<mt_kahypar_hyperedge_id_t[]>(_bnode_clusters.size());
+    for(size_t i=0; i<_bnode_clusters.size(); i++) {
+      hyperedges[i] = i;
+    }
+    // same concept as eptr in hmetis
+    std::unique_ptr<size_t[]> hyperedge_indices = std::make_unique<size_t[]>(_bnode_clusters.size() + 1);
+    hyperedge_indices[0] = 0;
+    for(size_t i=1; i<_bnode_clusters.size() + 1; i++) {
+      hyperedge_indices[i] = i;
+    }
+    /* ----------------------------------------------------
+     * get node_weights 
+     * ----------------------------------------------------
+     */
+    std::unique_ptr<mt_kahypar_hypernode_weight_t[]> node_weights =
+    std::make_unique<mt_kahypar_hypernode_weight_t[]>(bnum_nodes);
+    for(size_t index=0; index<_bnode_clusters_indices.size(); index++) {
+      node_weights[index] = _bpin_clusters_weights[_bnode_clusters_indices[index]];
+    }
+    /* ----------------------------------------------------
+     * get hyperedge_weights
+     * ----------------------------------------------------
+     */
+    std::unique_ptr<mt_kahypar_hyperedge_weight_t[]> hyperedge_weights =
+      std::make_unique<mt_kahypar_hyperedge_weight_t[]>(bnum_nodes);
+    for(size_t index=0; index<_bnode_clusters_indices.size(); index++) {
+      hyperedge_weights[index] = _bpin_clusters_weights[_bnode_clusters_indices[index]];
+    }
+    /* ----------------------------------------------------
+     * do partition
+     * ----------------------------------------------------
+     */
+    mt_kahypar_partition_id_t num_partition = _set_num_partition;
+    if(num_partition > _bsink_pins.size()) {
+      num_partition = _bsink_pins.size();
+    }
+    bnum_hyperedges = bnum_nodes;
+    // Construct hypergraph for DEFAULT preset
+    mt_kahypar_hypergraph_t hypergraph =
+      mt_kahypar_create_hypergraph(DEFAULT, bnum_nodes, bnum_hyperedges,
+        hyperedge_indices.get(), hyperedges.get(),
+        hyperedge_weights.get(), node_weights.get());
+    // Setup partitioning context
+    mt_kahypar_context_t* context = mt_kahypar_context_new();
+    mt_kahypar_load_preset(context, DEFAULT /* corresponds to MT-KaHyPar-D */);
+    // In the following, we partition a hypergraph into two blocks
+    // with an allowed imbalance of 3% and optimize the connective metric (KM1)
+    mt_kahypar_set_partitioning_parameters(context,
+      num_partition /* number of blocks */, _im /* imbalance parameter */,
+      KM1 /* objective function */, 42 /* seed */);
+    // Enable logging
+    mt_kahypar_set_context_parameter(context, VERBOSE, "1");
+    // Partition Hypergraph
+    mt_kahypar_partitioned_hypergraph_t partitioned_hg =
+      mt_kahypar_partition(hypergraph, context);
+    // Extract Partition
+    std::unique_ptr<mt_kahypar_partition_id_t[]> partition =
+      std::make_unique<mt_kahypar_partition_id_t[]>(mt_kahypar_num_hypernodes(hypergraph));
+    mt_kahypar_get_partition(partitioned_hg, partition.get());
+    for(size_t i=0; i<mt_kahypar_num_hypernodes(hypergraph); i++) {
+      std::cout << partition[i] << " ";
+      _bpartition.push_back(partition[i]);
+    }
+    mt_kahypar_free_context(context);
+    mt_kahypar_free_hypergraph(hypergraph);
+    mt_kahypar_free_partitioned_hypergraph(partitioned_hg);
+  }
+  /* ----------------------------------------------------
+   * append partition results to partition_id of each pin
+   * ----------------------------------------------------
+   */
+  // assign partition_id for pins in node cluster
+  for(size_t i=0; i<_bnode_clusters.size(); i++) {
+    int partition_id = _bpartition[i]; // here partition_id is left_shift_count
+    _bnode_clusters[i][0]->_bpartition_id = 1 << partition_id;
+  }
+  // finish assigning partition_id for pins in node_clusters
+  for(const auto& cluster : _bnode_clusters) {
+    if(cluster.size() > 1) {
+      for(size_t i=1; i<cluster.size(); i++) {
+        // notice that here pins in _fprop_cands will also be assigned with _bpartition_id
+        cluster[i]->_bpartition_id = cluster[i-1]->_bpartition_id;
+      }
+    }
+  }
+  // reversely traverse _bprop_cands to assign _bpartition_id for each pin
+  for(auto it = _bprop_cands.rbegin(); it != _bprop_cands.rend(); ++it) {
+    // assign the dependent pins with bpartition_id of current pin
+    for(auto arc : (*it)->_fanout) {
+      Pin* to = &(arc->_to);
+      if(to->_has_state(Pin::BPROP_CAND)) {
+        to->_bpartition_id = to->_bpartition_id | (*it)->_bpartition_id;
+      }
+    }
+  }
 }
 
 void Timer::_execute_task_manually() {

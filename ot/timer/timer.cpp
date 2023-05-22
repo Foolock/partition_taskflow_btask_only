@@ -1022,39 +1022,36 @@ void Timer::_update_timing() {
 //  }
 
   // build propagation tasks
-//  _build_prop_tasks();
+  auto start = std::chrono::steady_clock::now(); 
   _build_prop_cands();
-
+//  _build_prop_tasks();
 //  _taskflow.dump(std::cout);
-
-  // cluster the task graph by adding cone_id to each pin and get cluster
-  auto start = std::chrono::steady_clock::now();
-  _cluster_graph();
   auto end = std::chrono::steady_clock::now();
+  build_cands_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
+
+
+  // cluster graph 
+  start = std::chrono::steady_clock::now(); 
+  _cluster_graph();
+  end = std::chrono::steady_clock::now();
   cluster_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
 
-  start = std::chrono::steady_clock::now();
-  // get partitions
-  _get_partition();
+  // process clusters: classify them into node/edge clusters, and add weights
+  start = std::chrono::steady_clock::now(); 
+  _process_clusters();
+  end = std::chrono::steady_clock::now();
+  process_cluster_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
+  
+  // get partitions 
+  start = std::chrono::steady_clock::now(); 
+  _get_fpartitions();
+  _get_bpartitions();
   end = std::chrono::steady_clock::now();
   partition_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
 
-  // get topologically sorted pins of each partition
-  _get_topo_order();
-
-  // clear original taskflow and build partition_taskflow
-  _taskflow.clear();
-  _build_partitioned_taskflow(); 
-//  _execute_task_manually();
-
   // Execute the task
-  start = std::chrono::steady_clock::now();
-  _executor.run(_taskflow).wait();
-  end = std::chrono::steady_clock::now();
-  taskflow_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
+  _execute_task_manually();
   _taskflow.clear();
-
-//  _check_mtkahypar();
 
   // clear repcut used varibles
   _reset_repcut();
@@ -1558,6 +1555,8 @@ void Timer::_set_load(PrimaryOutput& po, Split m, Tran t, std::optional<float> v
 
 // ------------------------------------------------------------- RepCut Implementation ----------------------------------------------------
 
+
+// ------------------------------------------------------------- Action Implementation ----------------------------------------------------
 void Timer::_cluster_graph() {
 
   /*
@@ -1582,53 +1581,56 @@ void Timer::_cluster_graph() {
    * so we can traverse _bprop_cands and then _fprop_cands to cluster all the pins
    */
 
-  // count the number of _sink_pins to determine how many int64_t we need to represent cone_id
+  // count the number of _bsink_pins to determine how many int64_t we need to represent bcone_id
   for(auto pin : _bprop_cands) {
     if(pin->_fanin.size() == 0) {
-      _sink_pins.push_back(pin);
+      _bsink_pins.push_back(pin);
     }
   }
 
-  std::vector<Pin*> check_vector;
-  for(auto pin : _bprop_cands) {
-    if(pin->_btask && pin->_btask.value().num_successors() == 0) {
-      check_vector.push_back(pin);
+  // count the number of _fsink_pins to determine how many int64_t we need to represent fcone_id
+  for(auto pin : _fprop_cands) {
+    if(pin->_fanout.size() == 0) {
+      _fsink_pins.push_back(pin);
     }
   }
-
+  
   /*
    * ----------------------------------------------------
-   * checker: to see if pin->_fanin == 0 must be sink pins
-   * result: for current test cases, the above statement is true
+   * checker:  print _bsink_pins and _fsink_pins 
    */
-  // int count = 0;
-  // for(auto pin : _bprop_cands) {
-  //   if(pin->_btask && pin->_btask.value().num_successors() == 0) {
-  //     count ++;
-  //     std::cout << pin->_name << "\n";
-  //   }
+  // std::cerr << "_bsink_pins: \n";
+  // for(auto pin : _bsink_pins) {
+  //   std::cerr << pin->_name << " ";
   // }
-  // if(count != _sink_pins.size()) {
-  //   std::cerr << "error: sink pins number is wrong.\n";
-  //   std::exit(EXIT_FAILURE);
+  // std::cerr << "\n";
+  // std::cerr << "_fsink_pins: \n";
+  // for(auto pin : _fsink_pins) {
+  //   std::cerr << pin->_name << " ";
   // }
+  // std::cerr << "\n";
   /*
-   * -----------------------------------------------------    
+   * ----------------------------------------------------
    */
 
   // assign fixed length to cone_id for each pin
-  size_t length = _sink_pins.size() / 32 + 1;
-  for(auto pin : _frontiers) {
+  size_t length = _bsink_pins.size() / 32 + 1;
+  for(auto pin : _bprop_cands) {
+    for(size_t i=0; i<length; i++) {
+      pin->_bcone_id.push_back(0);
+    }
+  }
+  length = _fsink_pins.size() / 32 + 1;
+  for(auto pin : _fprop_cands) {
     for(size_t i=0; i<length; i++) {
       pin->_fcone_id.push_back(0);
-      pin->_bcone_id.push_back(0);
-    } 
-  } 
+    }
+  }
 
-  // assign bcone_id to each sink pins
-  int leftshift_count = 0; // counter of how many bit to left shift 
+  // assign cone_id to each sink pins
+  int leftshift_count = 0; // counter of how many bit to left shift
   int next_uint = 0; // counter to indicate which uint to left shift
-  for(auto pin : _sink_pins) {
+  for(auto pin : _bsink_pins) {
     if(leftshift_count == 32) { // this means the current uint has been filled up
       next_uint ++; // switch to next unit
       pin->_bcone_id[next_uint] = 1; // initialize next unit as 1
@@ -1636,38 +1638,49 @@ void Timer::_cluster_graph() {
     }
     else {
       pin->_bcone_id[next_uint] = 1 << leftshift_count;
-      leftshift_count ++;  
+      leftshift_count ++;
+    }
+  }
+  leftshift_count = 0; // counter of how many bit to left shift
+  next_uint = 0; // counter to indicate which uint to left shift
+  for(auto pin : _fsink_pins) {
+    if(leftshift_count == 32) { // this means the current uint has been filled up
+      next_uint ++; // switch to next unit
+      pin->_fcone_id[next_uint] = 1; // initialize next unit as 1
+      leftshift_count = 1; // reset leftshift_count as 1
+    }
+    else {
+      pin->_fcone_id[next_uint] = 1 << leftshift_count;
+      leftshift_count ++;
     }
   }
 
   /*
    * ----------------------------------------------------
-   * checker: to see if bcone_id is initialized correctly  
-   * result: it works for unit32_t, but not uint64_t, uint64_t will still overflow after 1 << 32, quiz?? 
+   * checker:  print cone_id _bsink_pins and _fsink_pins 
    */
-  // for(auto pin : _sink_pins) {
-  //   std::cerr << pin->_name << ": ";
-  //   for(int i=0; i<pin->_bcone_id.size(); i++) {
-  //     _bin_uint32(pin->_bcone_id[i]);
+  // std::cerr << "cone id _bsink_pins: \n";
+  // for(auto pin : _bsink_pins) {
+  //   std::cerr << pin->_name << " ";
+  //   for(auto bits : pin->_bcone_id) {
+  //     _bin_uint32(bits);
+  //     std::cerr << " ";
+  //   }
+  //   std::cerr << "\n";
+  // }
+  // std::cerr << "cone id _fsink_pins: \n";
+  // for(auto pin : _fsink_pins) {
+  //   std::cerr << pin->_name << " ";
+  //   for(auto bits : pin->_fcone_id) {
+  //     _bin_uint32(bits);
   //     std::cerr << " ";
   //   }
   //   std::cerr << "\n";
   // }
   /*
-   * -----------------------------------------------------
+   * ----------------------------------------------------
    */
-
-  /*
-   * what is 
-   * if(arc->_has_state(Arc::LOOP_BREAKER)) {
-   *  continue;
-   * }
-   * if(auto& from = arc->_from; from._has_state(Pin::FPROP_CAND))
-   * doing? 
-   * why wb_dma will fail only sometimes????
-   */
-
-
+  
   // reversely traverse _bprop_cands to assign _bcone_id for each pin
   for(auto it = _bprop_cands.rbegin(); it != _bprop_cands.rend(); ++it) {
     // assign the dependent pins with bcone_id of current pin 
@@ -1680,15 +1693,6 @@ void Timer::_cluster_graph() {
       }
     }
   }
-
-  // for _end_pins (the pins seperates the _ftask and _btask), their _bcone_id and _fconeid are the same
-  for(auto pin : _fprop_cands) {
-    if(pin->_fanout.size() == 0) {
-      pin->_fcone_id = pin->_bcone_id;
-      // std::cout << "end_pins: " << pin->_name << "\n";
-    }
-  }
-
   // reversely traverse _fprop_cands to assign _fcone_id for each pin
   for(auto it = _fprop_cands.rbegin(); it != _fprop_cands.rend(); ++it) {
     // assign the dependent pins with bcone_id of current pin 
@@ -1701,64 +1705,125 @@ void Timer::_cluster_graph() {
       }
     }
   }
-
-
+  
   /*
    * ----------------------------------------------------
-   * checker: to see if cone_id for each pin is assigned correctly  
-   * result: it works for unit32_t, but not uint64_t, uint64_t will still overflow after 1 << 32, quiz?? 
+   * checker: to see if cone_id for each pin is assigned correctly
+   * result: it works for unit32_t, but not uint64_t, uint64_t will still overflow after 1 << 32, quiz??
    */
   // for(auto pin : _frontiers) {
-  //   std::cout << pin->_name << ": ";
-  //   std::cout << "_bcone_id: \n";
-  //   for(int i=0; i<pin->_bcone_id.size(); i++) {
+  //   std::cerr << pin->_name << ": ";
+  //   std::cerr << "_bcone_id: \n";
+  //   for(size_t i=0; i<pin->_bcone_id.size(); i++) {
   //     _bin_uint32(pin->_bcone_id[i]);
-  //     std::cout << " ";
+  //     std::cerr << " ";
   //   }
-  //   std::cout << "\n";
-  //   std::cout << "_fcone_id: \n";
-  //   for(int i=0; i<pin->_fcone_id.size(); i++) {
+  //   std::cerr << "\n";
+  //   std::cerr << "_fcone_id: \n";
+  //   for(size_t i=0; i<pin->_fcone_id.size(); i++) {
   //     _bin_uint32(pin->_fcone_id[i]);
-  //     std::cout << " ";
+  //     std::cerr << " ";
   //   }
-  //   std::cout << "\n";
+  //   std::cerr << "\n";
   // }
   /*
    * -----------------------------------------------------
    */
 
-  auto start = std::chrono::steady_clock::now();
   _get_pin_clusters();
-  auto end = std::chrono::steady_clock::now();
-  sorting_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
-
-  /*
-   * ----------------------------------------------------
-   * checker: check if _pin_clusters is correct  
-   * result: result is correct for c17 
-   */
-  // for(auto v : _pin_clusters) {
-  //   std::cout << "cluster: ";
-  //   for(auto pin : v) {
-  //     std::cout << pin->_name << " ";
-  //   }
-  //   std::cout << "\n";
-  // }
-  /*
-   * -----------------------------------------------------
-   */
 
 }
 
-void Timer::_get_partition() {
+void Timer::_get_pin_clusters() {
+ 
+  for(auto pin : _bprop_cands) {
+    pin->_bcone_id_string = _uint32_to_string(pin->_bcone_id); 
+  }
+  std::unordered_map<std::string, std::vector<Pin*>> bmap;
+  for(const auto& pin : _bprop_cands) {
+    bmap[pin->_bcone_id_string].push_back(pin);
+  }
+  for(auto pin : _fprop_cands) {
+    pin->_fcone_id_string = _uint32_to_string(pin->_fcone_id); 
+  }
+  std::unordered_map<std::string, std::vector<Pin*>> fmap;
+  for(const auto& pin : _fprop_cands) {
+    fmap[pin->_fcone_id_string].push_back(pin);
+  }
+  for(const auto& [cone_string, pins] : bmap) {
+    _bpin_clusters.push_back(pins);
+  }
+  for(const auto& [cone_string, pins] : fmap) {
+    _fpin_clusters.push_back(pins);
+  }
   
-  std::vector<size_t> pin_clusters_weights;
-  std::vector<size_t> node_clusters_indices;
-  std::vector<size_t> edge_clusters_indices;
-  size_t index = 0; size_t check_bcone = 0; // 2 counters for filling up node_clusters_indices 
-                                                         // and edge_clusters_indices; 
-  for(const auto& cluster : _pin_clusters) {
-    
+  /*
+  // traverse bprop_cands to fill up _pin_clusters
+  std::vector<std::vector<uint32_t>> bvisited_cone;
+  for(size_t i=0; i<_bprop_cands.size(); i++) {
+    auto it = std::find(bvisited_cone.begin(), bvisited_cone.end(), _bprop_cands[i]->_bcone_id);
+    if(it == bvisited_cone.end()) { 
+      _bpin_clusters.push_back({_bprop_cands[i]});
+      bvisited_cone.push_back(_bprop_cands[i]->_bcone_id); 
+    }
+    else {
+      _bpin_clusters[std::distance(bvisited_cone.begin(), it)].push_back(_bprop_cands[i]);
+    }
+  }
+
+  // traverse bprop_cands to fill up _pin_clusters
+  std::vector<std::vector<uint32_t>> fvisited_cone;
+  for(size_t i=0; i<_fprop_cands.size(); i++) {
+    auto it = std::find(fvisited_cone.begin(), fvisited_cone.end(), _fprop_cands[i]->_fcone_id);
+    if(it == fvisited_cone.end()) {
+      std::cerr << "add new fcone_id: " << std::distance(fvisited_cone.begin(), it) << "\n";
+      _fpin_clusters.push_back({_fprop_cands[i]});
+      fvisited_cone.push_back(_fprop_cands[i]->_fcone_id); 
+      std::cerr << "fvisited_cone: ";
+      for(auto fcone_id : fvisited_cone) {
+        std::cerr << _uint32_to_string(fcone_id) << " "; 
+      }
+      std::cerr << "\n";
+    }
+    else {
+      _fpin_clusters[std::distance(fvisited_cone.begin(), it)].push_back(_fprop_cands[i]);
+    }
+  }
+  */
+
+  /*
+   * ----------------------------------------------------
+   * checker: check if _bpin_clusters and _f[in_clusters are correct
+   */
+  // std::cerr << "check _bpin_clusters: \n";
+  // for(auto cluster : _bpin_clusters) {
+  //   std::string s = _uint32_to_string(cluster[0]->_bcone_id);
+  //   std::cerr << s << ": ";
+  //   for(auto pin : cluster) {
+  //     std::cerr << pin->_name << " ";
+  //   }
+  //   std::cerr << "\n";
+  // }
+  // std::cerr << "check _fpin_clusters: \n";
+  // for(auto cluster : _fpin_clusters) {
+  //   std::string s = _uint32_to_string(cluster[0]->_fcone_id);
+  //   std::cerr << s << ": ";
+  //   for(auto pin : cluster) {
+  //     std::cerr << pin->_name << " ";
+  //   }
+  //   std::cerr << "\n";
+  // }
+  /*
+   * ----------------------------------------------------
+   */
+
+
+}
+
+void Timer::_process_clusters() {
+
+  size_t index = 0;
+  for(const auto& cluster : _fpin_clusters) {
     /*
      * fill up pin_cluster_weights
      */
@@ -1771,52 +1836,53 @@ void Timer::_get_partition() {
         cluster_runtime += pin->_btask_runtime;
       }
     }
-    pin_clusters_weights.push_back(cluster_runtime);
-  
+    _fpin_clusters_weights.push_back(cluster_runtime);
+    
     /*
      * fill up node_clusters_indices and edge_clusters_indices
      */
-    if(check_bcone <= _num_bcone_id) {
-      if(_is_node_cluster(cluster[0], true)) {
-        node_clusters_indices.push_back(index);
-      }
-      else {
-        edge_clusters_indices.push_back(index);
-      }
+    if(_is_node_cluster(cluster[0], false)) {
+      _fnode_clusters_indices.push_back(index);
     }
     else {
-      if(_is_node_cluster(cluster[0], false)) {
-        node_clusters_indices.push_back(index);
+      _fedge_clusters_indices.push_back(index);
+    }
+    index++;
+  } 
+
+  index = 0;
+  for(const auto& cluster : _bpin_clusters) {
+    /*
+     * fill up pin_cluster_weights
+     */
+    size_t cluster_runtime = 0;
+    for (const auto& pin : cluster) {
+      if(pin->_ftask) {
+        cluster_runtime += pin->_ftask_runtime;
       }
-      else {
-        edge_clusters_indices.push_back(index);
+      if(pin->_btask) {
+        cluster_runtime += pin->_btask_runtime;
       }
     }
-    check_bcone ++; 
-    index ++;
+    _bpin_clusters_weights.push_back(cluster_runtime);
+    
+    /*
+     * fill up node_clusters_indices and edge_clusters_indices
+     */
+    if(_is_node_cluster(cluster[0], true)) {
+      _bnode_clusters_indices.push_back(index);
+    }
+    else {
+      _bedge_clusters_indices.push_back(index);
+    } 
+    index++;
   }
 
-//  std::cout << "node_clusters_indices: ";
-//  for(auto index : node_clusters_indices) {
-//    std::cerr << index << " ";
-//  }
-//  std::cerr << "\n";
-//  std::cerr << "bcone_id of founded_node_clusters: \n";
-//  for(auto index : node_clusters_indices) {
-//    std::cerr << _pin_clusters[index][0]->_name << ": ";
-//    for(auto bits : _pin_clusters[index][0]->_bcone_id) {
-//      _bin_uint32(bits);
-//      std::cerr << " ";
-//    }
-//    std::cerr << "\n";
-//  }
-//  std::cerr << "\n";
-  
   // normalize it for mt-kahypar
-  size_t max = *(std::max_element(pin_clusters_weights.begin(), pin_clusters_weights.end()));
-  size_t min = *(std::min_element(pin_clusters_weights.begin(), pin_clusters_weights.end()));
-  
-  for(auto& weight : pin_clusters_weights) {
+  size_t max = *(std::max_element(_fpin_clusters_weights.begin(), _fpin_clusters_weights.end()));
+  size_t min = *(std::min_element(_fpin_clusters_weights.begin(), _fpin_clusters_weights.end()));
+
+  for(auto& weight : _fpin_clusters_weights) {
     if(max == min) {
       weight = 1;
     }
@@ -1825,364 +1891,344 @@ void Timer::_get_partition() {
     }
   }
 
+  // normalize it for mt-kahypar
+  max = *(std::max_element(_bpin_clusters_weights.begin(), _bpin_clusters_weights.end()));
+  min = *(std::min_element(_bpin_clusters_weights.begin(), _bpin_clusters_weights.end()));
+
+  for(auto& weight : _bpin_clusters_weights) {
+    if(max == min) {
+      weight = 1;
+    }
+    else {
+      weight = (weight - min)/(max - min)*2 + 1;
+    }
+  }
+
+  std::stable_sort(_fnode_clusters_indices.begin(), _fnode_clusters_indices.end(), [this] (size_t a, size_t b) {
+    return _comp_uint32_vector(_fpin_clusters[a][0]->_fcone_id, _fpin_clusters[b][0]->_fcone_id);
+  });
+  for(const auto& index : _fnode_clusters_indices) {
+    _fnode_clusters.push_back(_fpin_clusters[index]);
+  }
+  for(const auto& index : _fedge_clusters_indices) {
+    _fedge_clusters.push_back(_fpin_clusters[index]);
+  }
+
+  std::stable_sort(_bnode_clusters_indices.begin(), _bnode_clusters_indices.end(), [this] (size_t a, size_t b) {
+    return _comp_uint32_vector(_bpin_clusters[a][0]->_bcone_id, _bpin_clusters[b][0]->_bcone_id);
+  });
+  for(const auto& index : _bnode_clusters_indices) {
+    _bnode_clusters.push_back(_bpin_clusters[index]);
+  }
+  for(const auto& index : _bedge_clusters_indices) {
+    _bedge_clusters.push_back(_bpin_clusters[index]);
+  }
+
   /*
    * ----------------------------------------------------
-   * checker: check if weights of clusters are initialized correctly(no < 0)  
-   * result: for des_perf(or most testbench circuit I believe), the weights are 
-   * always 1000, and lots of 1, cuz there will always be one super big clusters and lots of small
-   * clusters comparing to it. I am not sure if it is a good idea to normalize in this way???
-   * we can also do something else like just dividied the weight by 1000 and add 1, in this case 
-   * we can see a result of 1350, 1, ... 1, 44, in des_perf case,  at least something different
+   * checker: check if node_clusters and edge_clusters are correct
+   * result: result is correct for c17
    */
-  // std::cout << "pin_clusters_weights: ";
-  // for(auto weight : pin_clusters_weights) {
-  //   std::cout << weight << " ";
+  // std::cerr << "_fpin_clusters: \n";
+  // for(auto v : _fpin_clusters) {
+  //   for(auto pin : v) {
+  //     std::cerr << pin->_name << " ";
+  //   }
+  //   std::cerr << "\n";
   // }
-  // std::cout << "\n";
+  // std::cerr << "_fnode_clusters: \n";
+  // for(auto v : _fnode_clusters) {
+  //   for(auto pin : v) {
+  //     std::cerr << pin->_name << " ";
+  //   }
+  //   std::cerr << "\n";
+  // }
+  // std::cerr << "_fedge_clusters: \n";
+  // for(auto v : _fedge_clusters) {
+  //   for(auto pin : v) {
+  //     std::cerr << pin->_name << " ";
+  //   }
+  //   std::cerr << "\n";
+  // }
+
+  // std::cerr << "_bpin_clusters: \n";
+  // for(auto v : _bpin_clusters) {
+  //   for(auto pin : v) {
+  //     std::cerr << pin->_name << " ";
+  //   }
+  //   std::cerr << "\n";
+  // }
+  // std::cerr << "_bnode_clusters: \n";
+  // for(auto v : _bnode_clusters) {
+  //   for(auto pin : v) {
+  //     std::cerr << pin->_name << " ";
+  //   }
+  //   std::cerr << "\n";
+  // }
+  // std::cerr << "_bedge_clusters: \n";
+  // for(auto v : _bedge_clusters) {
+  //   for(auto pin : v) {
+  //     std::cerr << pin->_name << " ";
+  //   }
+  //   std::cerr << "\n";
+  // }
   /*
    * -----------------------------------------------------
    */
+}
 
-
-  std::vector<std::vector<Pin*>> node_clusters;  
-  std::vector<std::vector<Pin*>> edge_clusters;
-  for(const auto& index : node_clusters_indices) {
-    node_clusters.push_back(_pin_clusters[index]);
-  }
-  for(const auto& index : edge_clusters_indices) {
-    edge_clusters.push_back(_pin_clusters[index]);
-  }
-
-
-  /*
-   * ----------------------------------------------------
-   * checker: check if node_clusters and edge_clusters are correct  
-   * result: result is correct for c17 
-   */
-  // std::cout << "_pin_clusters: \n";
-  // for(auto v : _pin_clusters) {
-  //   for(auto pin : v) {
-  //     std::cout << pin->_name << " ";
-  //   }
-  //   std::cout << "\n";
-  // }
-  // std::cout << "node_clusters: \n";
-  // for(auto v : node_clusters) {
-  //   for(auto pin : v) {
-  //     std::cout << pin->_name << " ";
-  //   }
-  //   std::cout << "\n";
-  // }
-  // std::cout << "edge_clusters: \n";
-  // for(auto v : edge_clusters) {
-  //   for(auto pin : v) {
-  //     std::cout << pin->_name << " ";
-  //   }
-  //   std::cout << "\n";
-  // }
-  /*
-   * -----------------------------------------------------
-   */
-
-  // these 2 are not accurate, there will be missing nodes and edges which will be added below
-  const mt_kahypar_hypernode_id_t num_nodes = node_clusters_indices.size();
-  const mt_kahypar_hyperedge_id_t num_hyperedges = edge_clusters_indices.size();
+void Timer::_get_fpartitions() {
 
   /* ----------------------------------------------------
-   * get hyperedges and hyperedge_indices 
+   * get _fpartition 
    * ----------------------------------------------------
    */
+  // these 2 are not accurate, there will be missing nodes and edges which will be added below
+  const mt_kahypar_hypernode_id_t fnum_nodes = _fnode_clusters_indices.size();
+  const mt_kahypar_hyperedge_id_t fnum_hyperedges = _fedge_clusters_indices.size();
+
   /*
    * store a std::vector<Pin*> map representing the mapping between a pin id to a hypergraph node id(0 -> num_nodes-1),
    * this pin belongs to a node cluster
    */
-  std::vector<Pin*> map_cone_to_node;
-  for(const auto& cluster : node_clusters) {
-    map_cone_to_node.push_back(cluster[0]);
+  std::vector<Pin*> fmap_cone_to_node;
+  for(const auto& cluster : _fnode_clusters) {
+    fmap_cone_to_node.push_back(cluster[0]);
   }
 
   /* 
    * traverse edge_clusters, check if a pin of an edge cluster has the same cone id as the pin in map_cone_to_node
-   * 1. to decide cone_id is forward or backward, use _num_bcone_id and edge_clusters_indices to judge
-   *    if edge_clusters_indices[i] <= _num_bcone_id, use pin->_bcone_id, else pin->_fcone_id
-   * 2. a cone_id of a pin in edge clusters will actually include more than one cone id of a pin in node clusters by definition
+   * 1. a cone_id of a pin in edge clusters will actually include more than one cone id of a pin in node clusters by definition
    *    so we use a bit series with only one bit = 1 to scan this edge cone_id to get node cone_id 
    */
-  std::vector<size_t> eind;
-  std::vector<size_t> eptr(num_hyperedges+1, 0);
-  for(size_t index=0; index<edge_clusters.size(); index++) {
+  std::vector<size_t> feind;
+  std::vector<size_t> feptr(fnum_hyperedges+1, 0);
+  if(_fedge_clusters.size() > 0) { // there could be no edge_clusters 
+    for(size_t index=0; index<_fedge_clusters.size(); index++) {
     
-    // get edge cone_id
-    auto pin = edge_clusters[index][0];
-    std::vector<uint32_t> cone_id;
-    if(edge_clusters_indices[index] <= _num_bcone_id) {
-      cone_id = pin->_bcone_id;
-    }
-    else {
-      cone_id = pin->_fcone_id;
-    }
+      // get edge cone_id
+      auto pin = _fedge_clusters[index][0];
+      std::vector<uint32_t> cone_id = pin->_fcone_id;
 
-    // scan edge cone_id to get node cone_id, this nested for-loop is so redundent???????
-    std::vector<uint32_t> scan(cone_id.size());
-    for(size_t next_uint=0; next_uint<cone_id.size(); next_uint++) {  
-      for(size_t leftshift_count=0; leftshift_count<32; leftshift_count++) {
-        scan[next_uint] = 1 << leftshift_count;
-        uint32_t result = scan[next_uint] & cone_id[next_uint];
-        if(result != 0) { // means a node cone id is found
-          // then go to map_cone_to_node to find which pin->_bcone_id[next_uint] == result, once found, add its location
-          // in map_cone_to_node to hyperedges, only check _bcone_id cuz cone_id for node clusters are all _bcone_id
-          for(size_t location =0; location<map_cone_to_node.size(); location++) {
-            if(map_cone_to_node[location]->_bcone_id[next_uint] == result) {
-              eind.push_back(location);
-              eptr[index+1]++;
-            }
+      // scan edge cone_id to get node cone_id, this nested for-loop is so redundent???????
+      std::vector<uint32_t> scan(cone_id.size());
+      for(size_t next_uint=0; next_uint<cone_id.size(); next_uint++) {
+        for(size_t leftshift_count=0; leftshift_count<32; leftshift_count++) {
+          scan[next_uint] = 1 << leftshift_count;
+          uint32_t result = scan[next_uint] & cone_id[next_uint];
+          if(result != 0) { // means a node cone id is found
+            // then go to map_cone_to_node to find which pin->_fcone_id[next_uint] == result, once found, add its location
+            // in map_cone_to_node to hyperedges, only check _fcone_id cuz cone_id for node clusters are all _bcone_id
+            // update: no need to use map_cone_to_node here anymore cuz I sort the node_clusters and node_cluster_indices 
+            feind.push_back(leftshift_count + 32*next_uint);
+            feptr[index+1]++;
           }
         }
-      }  
-    }
-  }
-
-  /*
-   * there may be a case where there is a isolated small graph with only one sink pin in the original _taskflow
-   * in this case, this small graph is a node cluster, it will appear in the _pin_clusters but there will be no
-   * pins in edge_clusters whose cone id includes this node cluster
-   * we need to check if there is(yes sir) such a case after we construct eptr and eind normally
-   */
-  // traverse edge_clusters
-  std::vector<uint32_t> bit_checker; // checker to see if there is such a node cluster mentioned above
-  for(const auto& num : edge_clusters[0][0]->_bcone_id) {
-    bit_checker.push_back(num);
-  }
-  size_t num_uint32 = bit_checker.size();
-  for(const auto& cluster : edge_clusters) {
-    for(size_t i=0; i<num_uint32; i++) {
-      bit_checker[i] = bit_checker[i] | cluster[0]->_bcone_id[i];
-      bit_checker[i] = bit_checker[i] | cluster[0]->_fcone_id[i];
-    }
-  }
-
-  // from LSB to _sink_pins.size(), check if each bit is 1, if not, record its location
-  std::vector<uint32_t> scan_result;
-  std::vector<uint32_t> scan_bit(bit_checker.size());
-  size_t scan_uint = 0; // start scanning from 0 to bit_checker.size()-1 uint32
-  for(size_t ls=0; ls<_sink_pins.size(); ls++) { // use ls(left shift) scanner
-    scan_bit[scan_uint] = 1 << (ls % 32);
-    assert(scan_uint <= bit_checker.size());
-    if((bit_checker[scan_uint] & scan_bit[scan_uint]) != scan_bit[scan_uint]) { // find a standalone node cluster
-      scan_result.push_back(ls); // store the location of "0" in bit_checker (within _sink_pins.size())
-    }
-    if((ls % 32 == 0)&&(ls != 0)) { // once finish scanning an uint32_t, go to next one
-      scan_uint++;
-    }
-  }
-
-  // find the corresponding node cluster using scan result
-  std::vector<uint32_t> standalone_node_clusters; // store the indices of standalone node clusters in node_clusters/map_cone_to_node
-  for(const auto& num : scan_result) {
-    std::vector<uint32_t> target(bit_checker.size(), 0);
-    target[num / 32] = 1 << (num % 32); // this is the cone id of the node cluster we want to find
-    for(size_t i=0; i<node_clusters.size(); i++) {
-      if(node_clusters[i][0]->_bcone_id == target) { // we only need to check _bcone_id for node_clusters
-        standalone_node_clusters.push_back(i);
       }
     }
-  }
-
-  std::unique_ptr<mt_kahypar_hyperedge_id_t[]> hyperedges = std::make_unique<mt_kahypar_hyperedge_id_t[]>(eind.size() + standalone_node_clusters.size());  
-  for(size_t i=0; i<eind.size(); i++) {
-    hyperedges[i] = eind[i];
-  }
-  // add the standalone node cluster as one hyperedge
-  for(size_t i=0; i<standalone_node_clusters.size(); i++) {
-    hyperedges[eind.size()+i] = standalone_node_clusters[i]; 
-  }
-
-  // same concept as eptr in hmetis
-  std::unique_ptr<size_t[]> hyperedge_indices = std::make_unique<size_t[]>(edge_clusters_indices.size() + 1 + standalone_node_clusters.size());
-  hyperedge_indices[0] = 0;
-  for(size_t i=1; i<eptr.size(); i++) {
-    eptr[i] += eptr[i-1];
-    hyperedge_indices[i] = eptr[i];
-  }
-  // add the standalone node cluster as one hyperedge
-  if(standalone_node_clusters.size() != 0) {
-    for(size_t i=1; i<=standalone_node_clusters.size(); i++) {
-      hyperedge_indices[eptr.size()-1+i] = hyperedge_indices[eptr.size()-1+i-1] + 1; 
+    /*
+     * there may be a case where there is a isolated small graph with only one sink pin in the original _taskflow
+     * in this case, this small graph is a node cluster, it will appear in the _pin_clusters but there will be no
+     * pins in edge_clusters whose cone id includes this node cluster
+     * we need to check if there is(yes sir) such a case after we construct eptr and eind normally
+     */
+    // traverse edge_clusters
+    std::vector<uint32_t> fbit_checker = _fedge_clusters[0][0]->_fcone_id; // checker to see if there is such a node cluster mentioned above
+    size_t num_uint32 = fbit_checker.size();
+    for(const auto& cluster : _fedge_clusters) {
+      for(size_t i=0; i<num_uint32; i++) {
+        fbit_checker[i] = fbit_checker[i] | cluster[0]->_fcone_id[i];
+      }
+    }  
+    // from LSB to _sink_pins.size(), check if each bit is 1, if not, record its location
+    std::vector<uint32_t> scan_result;
+    std::vector<uint32_t> scan_bit(fbit_checker.size());
+    size_t scan_uint = 0; // start scanning from 0 to bit_checker.size()-1 uint32
+    for(size_t ls=0; ls<_fsink_pins.size(); ls++) { // use ls(left shift) scanner
+      scan_bit[scan_uint] = 1 << (ls % 32);
+      assert(scan_uint <= fbit_checker.size());
+      if((fbit_checker[scan_uint] & scan_bit[scan_uint]) != scan_bit[scan_uint]) { // find a standalone node cluster
+        scan_result.push_back(ls); // store the location of "0" in bit_checker (within _sink_pins.size())
+      }
+      if((ls % 32 == 0)&&(ls != 0)) { // once finish scanning an uint32_t, go to next one
+        scan_uint++;
+      }
     }
+    /* ----------------------------------------------------
+     * get hyperedges and hyperedge_indices 
+     * ----------------------------------------------------
+     */
+    std::unique_ptr<mt_kahypar_hyperedge_id_t[]> hyperedges = std::make_unique<mt_kahypar_hyperedge_id_t[]>(feind.size() + scan_result.size());  
+    for(size_t i=0; i<feind.size(); i++) {
+      hyperedges[i] = feind[i];
+    }
+    // add the standalone node cluster as one hyperedge
+    for(size_t i=0; i<scan_result.size(); i++) {
+      hyperedges[feind.size()+i] = scan_result[i];
+    }
+    // same concept as eptr in hmetis
+    std::unique_ptr<size_t[]> hyperedge_indices = std::make_unique<size_t[]>(_fedge_clusters_indices.size() + 1 + scan_result.size());
+    hyperedge_indices[0] = 0;
+    for(size_t i=1; i<feptr.size(); i++) {
+      feptr[i] += feptr[i-1];
+      hyperedge_indices[i] = feptr[i];
+    }
+    // add the standalone node cluster as one hyperedge
+    if(scan_result.size() != 0) {
+      for(size_t i=1; i<=scan_result.size(); i++) {
+        hyperedge_indices[feptr.size()-1+i] = hyperedge_indices[feptr.size()-1+i-1] + 1; 
+      }
+    }
+    /* ----------------------------------------------------
+     * get node_weights 
+     * ----------------------------------------------------
+     */
+    std::unique_ptr<mt_kahypar_hypernode_weight_t[]> node_weights =
+    std::make_unique<mt_kahypar_hypernode_weight_t[]>(fnum_nodes);
+    for(size_t index=0; index<_fnode_clusters_indices.size(); index++) {
+      node_weights[index] = _fpin_clusters_weights[_fnode_clusters_indices[index]]; 
+    }
+    /* ----------------------------------------------------
+     * get hyperedge_weights 
+     * ----------------------------------------------------
+     */
+    std::unique_ptr<mt_kahypar_hyperedge_weight_t[]> hyperedge_weights =
+      std::make_unique<mt_kahypar_hyperedge_weight_t[]>(_fedge_clusters_indices.size() + scan_result.size());
+    for(size_t index=0; index<_fedge_clusters_indices.size(); index++) {
+      hyperedge_weights[index] = _fpin_clusters_weights[_fedge_clusters_indices[index]];   
+    }
+    // add the standalone node cluster as one hyperedge
+    for(size_t i=0; i<scan_result.size(); i++) {
+      hyperedge_weights[_fedge_clusters_indices.size()+i] = _fpin_clusters_weights[_fnode_clusters_indices[scan_result[i]]];
+    }
+    /* ----------------------------------------------------
+     * do partition
+     * ----------------------------------------------------
+     */
+    mt_kahypar_partition_id_t num_partition = _set_num_partition;
+    if(num_partition > _fsink_pins.size()) {
+      num_partition = _fsink_pins.size();
+    }
+    // Construct hypergraph for DEFAULT preset
+    mt_kahypar_hypergraph_t hypergraph =
+      mt_kahypar_create_hypergraph(DEFAULT, fnum_nodes, fnum_hyperedges,
+        hyperedge_indices.get(), hyperedges.get(),
+        hyperedge_weights.get(), node_weights.get());
+    // Setup partitioning context
+    mt_kahypar_context_t* context = mt_kahypar_context_new();
+    mt_kahypar_load_preset(context, DEFAULT /* corresponds to MT-KaHyPar-D */);
+    // In the following, we partition a hypergraph into two blocks
+    // with an allowed imbalance of 3% and optimize the connective metric (KM1)
+    mt_kahypar_set_partitioning_parameters(context,
+      num_partition /* number of blocks */, _im /* imbalance parameter */,
+      KM1 /* objective function */, 42 /* seed */);
+    // Enable logging
+    mt_kahypar_set_context_parameter(context, VERBOSE, "1");
+    // Partition Hypergraph
+    mt_kahypar_partitioned_hypergraph_t partitioned_hg =
+      mt_kahypar_partition(hypergraph, context);
+    // Extract Partition
+    std::unique_ptr<mt_kahypar_partition_id_t[]> partition =
+      std::make_unique<mt_kahypar_partition_id_t[]>(mt_kahypar_num_hypernodes(hypergraph));
+    mt_kahypar_get_partition(partitioned_hg, partition.get());
+    for(size_t i=0; i<mt_kahypar_num_hypernodes(hypergraph); i++) {
+      std::cout << partition[i] << " ";
+      _fpartition.push_back(partition[i]);
+    }
+    mt_kahypar_free_context(context);
+    mt_kahypar_free_hypergraph(hypergraph);
+    mt_kahypar_free_partitioned_hypergraph(partitioned_hg);
   }
-
-  assert(eptr.size() == edge_clusters_indices.size() + 1);
-
-  /* ----------------------------------------------------
-   * get node_weights 
-   * ----------------------------------------------------
-   */
-  std::unique_ptr<mt_kahypar_hypernode_weight_t[]> node_weights =
-    std::make_unique<mt_kahypar_hypernode_weight_t[]>(num_nodes);
-
-  for(size_t index=0; index<node_clusters_indices.size(); index++) {
-    node_weights[index] = pin_clusters_weights[node_clusters_indices[index]]; 
+  else { // if there is no edge clusters
+    /* ----------------------------------------------------
+     * get hyperedges and hyperedge_indices 
+     * ----------------------------------------------------
+     */
+    // now every node cluster is a hyperedge
+    std::unique_ptr<mt_kahypar_hyperedge_id_t[]> hyperedges = std::make_unique<mt_kahypar_hyperedge_id_t[]>(_fnode_clusters.size()); 
+    for(size_t i=0; i<_fnode_clusters.size(); i++) {
+      hyperedges[i] = i;
+    }
+    // same concept as eptr in hmetis
+    std::unique_ptr<size_t[]> hyperedge_indices = std::make_unique<size_t[]>(_fnode_clusters.size() + 1);
+    hyperedge_indices[0] = 0;
+    for(size_t i=1; i<_fnode_clusters.size() + 1; i++) {
+      hyperedge_indices[i] = i;
+    }
+    /* ----------------------------------------------------
+     * get node_weights 
+     * ----------------------------------------------------
+     */
+    std::unique_ptr<mt_kahypar_hypernode_weight_t[]> node_weights =
+    std::make_unique<mt_kahypar_hypernode_weight_t[]>(fnum_nodes);
+    for(size_t index=0; index<_fnode_clusters_indices.size(); index++) {
+      node_weights[index] = _fpin_clusters_weights[_fnode_clusters_indices[index]];
+    }
+    /* ----------------------------------------------------
+     * get hyperedge_weights 
+     * ----------------------------------------------------
+     */
+    std::unique_ptr<mt_kahypar_hyperedge_weight_t[]> hyperedge_weights =
+      std::make_unique<mt_kahypar_hyperedge_weight_t[]>(fnum_nodes);
+    for(size_t index=0; index<_fnode_clusters_indices.size(); index++) {
+      hyperedge_weights[index] = _fpin_clusters_weights[_fnode_clusters_indices[index]];
+    }
+    /* ----------------------------------------------------
+     * do partition
+     * ----------------------------------------------------
+     */
+    mt_kahypar_partition_id_t num_partition = _set_num_partition;
+    if(num_partition > _fsink_pins.size()) {
+      num_partition = _fsink_pins.size();
+    }
+    // Construct hypergraph for DEFAULT preset
+    mt_kahypar_hypergraph_t hypergraph =
+      mt_kahypar_create_hypergraph(DEFAULT, fnum_nodes, fnum_hyperedges,
+        hyperedge_indices.get(), hyperedges.get(),
+        hyperedge_weights.get(), node_weights.get());
+    // Setup partitioning context
+    mt_kahypar_context_t* context = mt_kahypar_context_new();
+    mt_kahypar_load_preset(context, DEFAULT /* corresponds to MT-KaHyPar-D */);
+    // In the following, we partition a hypergraph into two blocks
+    // with an allowed imbalance of 3% and optimize the connective metric (KM1)
+    mt_kahypar_set_partitioning_parameters(context,
+      num_partition /* number of blocks */, _im /* imbalance parameter */,
+      KM1 /* objective function */, 42 /* seed */);
+    // Enable logging
+    mt_kahypar_set_context_parameter(context, VERBOSE, "1");
+    // Partition Hypergraph
+    mt_kahypar_partitioned_hypergraph_t partitioned_hg =
+      mt_kahypar_partition(hypergraph, context);
+    // Extract Partition
+    std::unique_ptr<mt_kahypar_partition_id_t[]> partition =
+      std::make_unique<mt_kahypar_partition_id_t[]>(mt_kahypar_num_hypernodes(hypergraph));
+    mt_kahypar_get_partition(partitioned_hg, partition.get());
+    for(size_t i=0; i<mt_kahypar_num_hypernodes(hypergraph); i++) {
+      std::cout << partition[i] << " ";
+      _fpartition.push_back(partition[i]);
+    }
+    mt_kahypar_free_context(context);
+    mt_kahypar_free_hypergraph(hypergraph);
+    mt_kahypar_free_partitioned_hypergraph(partitioned_hg);
   }
-  
-  
-
-  /* ----------------------------------------------------
-   * get hyperedge_weights 
-   * ----------------------------------------------------
-   */
-  std::unique_ptr<mt_kahypar_hyperedge_weight_t[]> hyperedge_weights =
-    std::make_unique<mt_kahypar_hyperedge_weight_t[]>(edge_clusters_indices.size() + standalone_node_clusters.size());
-
-  for(size_t index=0; index<edge_clusters_indices.size(); index++) {
-    hyperedge_weights[index] = pin_clusters_weights[edge_clusters_indices[index]];   
-  }
-  // add the standalone node cluster as one hyperedge
-  for(size_t i=0; i<standalone_node_clusters.size(); i++) {
-    hyperedge_weights[edge_clusters_indices.size()+i] = pin_clusters_weights[node_clusters_indices[standalone_node_clusters[i]]]; 
-  }
-  
-  /*
-   * ----------------------------------------------------
-   * checker: check if partition paramters are correct  
-   */
-  //std::cerr << "edge_clusters:\n";
-  //int count = 0;
-  //for(const auto& cluster : edge_clusters) {
-  //  std::cerr << "cluster: ";
-  //  if(edge_clusters_indices[count] <= _num_bcone_id) {
-  //    for(auto num : cluster[0]->_bcone_id) {
-  //      _bin_uint32(num);
-  //      std::cerr << " ";
-  //    }
-  //  }
-  //  else {
-  //    for(auto num : cluster[0]->_fcone_id) {
-  //      _bin_uint32(num);
-  //      std::cerr << " ";
-  //    }
-  //  }
-  //  std::cerr << "\n";
-  //}
-  //std::cerr << "id mapping:\n";
-  //for(size_t i=0; i<map_cone_to_node.size(); i++) {
-  //  std::cerr << map_cone_to_node[i]->_name << ": " << i << ": ";
-  //  for(auto num : map_cone_to_node[i]->_bcone_id) {
-  //    _bin_uint32(num); 
-  //    std::cerr << " ";
-  //  }
-  //  std::cerr << "\n";
-  //}
-  //std::cerr << "hyperedge_indices: ";
-  //for(size_t i=0; i<edge_clusters_indices.size() + 1 + standalone_node_clusters.size(); i++) {
-  //  std::cerr << hyperedge_indices[i] << " ";
-  //} 
-  //std::cerr << "\n";
-  //std::cerr << "hyperedges:\n";
-  //for(size_t i=0; i<eind.size() + standalone_node_clusters.size(); i++) {
-  //  std::cerr << hyperedges[i] << " ";
-  //} 
-  //std::cerr << "\n";
-  //std::cerr << "node_weights: \n"; 
-  //for(size_t i=0; i<num_nodes; i++) {
-  //  std::cerr << node_weights[i] << " ";
-  //}
-  //std::cerr << "\n";
-  //std::cerr << "hyperedges_weights: \n"; 
-  //for(size_t i=0; i<edge_clusters_indices.size() + standalone_node_clusters.size(); i++) {
-  //  std::cerr << hyperedge_weights[i] << " ";
-  //}
-  //std::cerr << "\n";
-  /*
-   * ----------------------------------------------------
-   */
- 
-
-  /* ----------------------------------------------------
-   * do partition 
-   * ----------------------------------------------------
-   */
-
-  if(_num_partition > _sink_pins.size()) {
-    _num_partition = _sink_pins.size();
-  }
-
-  // Construct hypergraph for DEFAULT preset
-  mt_kahypar_hypergraph_t hypergraph =
-    mt_kahypar_create_hypergraph(DEFAULT, num_nodes, num_hyperedges,
-      hyperedge_indices.get(), hyperedges.get(),
-      hyperedge_weights.get(), node_weights.get());
-
-  // Setup partitioning context
-  mt_kahypar_context_t* context = mt_kahypar_context_new();
-  mt_kahypar_load_preset(context, DEFAULT /* corresponds to MT-KaHyPar-D */);
-  // In the following, we partition a hypergraph into two blocks
-  // with an allowed imbalance of 3% and optimize the connective metric (KM1)
-  mt_kahypar_set_partitioning_parameters(context,
-    _num_partition /* number of blocks */, _im /* imbalance parameter */,
-    KM1 /* objective function */, 42 /* seed */);
-  // Enable logging
-  mt_kahypar_set_context_parameter(context, VERBOSE, "1");
-
-  // Partition Hypergraph
-  mt_kahypar_partitioned_hypergraph_t partitioned_hg =
-    mt_kahypar_partition(hypergraph, context);
-
-  // Extract Partition
-  std::unique_ptr<mt_kahypar_partition_id_t[]> partition =
-    std::make_unique<mt_kahypar_partition_id_t[]>(mt_kahypar_num_hypernodes(hypergraph));
-  mt_kahypar_get_partition(partitioned_hg, partition.get());
-//  std::cout << "partition:          " << std::endl;
-  for(size_t i=0; i<mt_kahypar_num_hypernodes(hypergraph); i++) {
-//    std::cout << partition[i] << " ";
-    _partition.push_back(partition[i]);
-  }
-//  std::cout << "\n";
-
-  mt_kahypar_free_context(context);
-  mt_kahypar_free_hypergraph(hypergraph);
-  mt_kahypar_free_partitioned_hypergraph(partitioned_hg);
   /* ----------------------------------------------------
    * append partition results to partition_id of each pin 
    * ----------------------------------------------------
    */
-//  for(size_t i=0; i<_sink_pins.size(); i++) {
-//    _partition.push_back(0);
-//  }
-
-  // assign partition_id for pins in node cluster by map_cone_to_node 
-  for(size_t i=0; i<map_cone_to_node.size(); i++) {
-    int partition_id = _partition[i]; // here partition_id is left_shift_count
-    map_cone_to_node[i]->_bpartition_id = 1 << partition_id;
+  // assign partition_id for pins in node cluster
+  for(size_t i=0; i<_fnode_clusters.size(); i++) {
+    int partition_id = _fpartition[i]; // here partition_id is left_shift_count
+    _fnode_clusters[i][0]->_fpartition_id = 1 << partition_id;
   }
-
   // finish assigning partition_id for pins in node_clusters
-  for(const auto& cluster : node_clusters) {
+  for(const auto& cluster : _fnode_clusters) {
     if(cluster.size() > 1) {
       for(size_t i=1; i<cluster.size(); i++) {
         // notice that here pins in _fprop_cands will also be assigned with _bpartition_id
-        cluster[i]->_bpartition_id = cluster[i-1]->_bpartition_id;
+        cluster[i]->_fpartition_id = cluster[i-1]->_bpartition_id;
       }
     }
   }
-
-  // reversely traverse _bprop_cands to assign _bpartition_id for each pin
-  for(auto it = _bprop_cands.rbegin(); it != _bprop_cands.rend(); ++it) {
-    // assign the dependent pins with bpartition_id of current pin
-    for(auto arc : (*it)->_fanout) {
-      Pin* to = &(arc->_to);
-      if(to->_has_state(Pin::BPROP_CAND)) {
-        to->_bpartition_id = to->_bpartition_id | (*it)->_bpartition_id;
-      }
-    }
-  }
-  
-  // for _end_pins (the pins seperates the _ftask and _btask), their _bpartition_id and _fpartitionid are the same
-  for(auto pin : _fprop_cands) {
-    if(pin->_fanout.size() == 0) {
-      pin->_fpartition_id = pin->_bpartition_id;
-    }
-  }
-
   // reversely traverse _fprop_cands to assign _fpartition_id for each pin
   for(auto it = _fprop_cands.rbegin(); it != _fprop_cands.rend(); ++it) {
     // assign the dependent pins with bpartition_id of current pin
@@ -2193,190 +2239,15 @@ void Timer::_get_partition() {
       }
     }
   }
-
-  /*
-   * ----------------------------------------------------
-   * checker: check if partition_id is assigned correctly  
-   * result: result is correct for c17 
-   */
-  // for(auto pin : _frontiers) {
-  //   std::cout << pin->_name << ": ";
-  //   std::cout << "_bpartition_id: ";
-  //   _bin_uint32(pin->_bpartition_id);
-  //   std::cout << "\n";
-  //   std::cout << "_fpartition_id: ";
-  //   _bin_uint32(pin->_fpartition_id);
-  //   std::cout << "\n";
-  // }  
-  /*
-   * ----------------------------------------------------
-   */
-
-
 }
 
-void Timer::_get_topo_order() {
+void Timer::_get_bpartitions() {
 
-  /*
-   * traverse _bprop_cands and _fprop_cands to scan the partition_id for each pin
-   * we need to scan _partition.size() times, start traversing from fprop cuz we need top-down order 
-   * _bprop_cands and _fprop_cands are already topologically sorted from top to bottom in taskflow
-   * once found a pin belongs to a partition, store it into a std::vector<std::vector<Pin*>> _topo_partitioned_pins
-   */
-  for(int i=0; i<_num_partition; i++) {
-    std::vector<Pin*> one_partition_pins;
-    uint32_t scan = 1 << i;
-    for(auto pin : _fprop_cands) {
-      if((pin->_fpartition_id & scan) == scan) {
-        one_partition_pins.push_back(pin);
-      }
-    }
-    _ftopo_partitioned_pins.push_back(one_partition_pins); 
-  }
-  
-  for(int i=0; i<_num_partition; i++) {
-    std::vector<Pin*> one_partition_pins;
-    uint32_t scan = 1 << i;
-    for(auto pin : _bprop_cands) {
-      if((pin->_bpartition_id & scan) == scan) {
-        one_partition_pins.push_back(pin);
-      }
-    }
-    _btopo_partitioned_pins.push_back(one_partition_pins); 
-  }
-  /*
-   * ----------------------------------------------------
-   * checker: check if _topo_partitioned_pins is correct  
-   * result: result is correct for c17 
-   */
-  // std::cout << "_ftopo_partitioned_pins: \n"; 
-  // for(const auto& partition : _ftopo_partitioned_pins) {
-  //   std::cout << "partition: \n";
-  //   for(auto pin : partition) {
-  //     std::cout << pin->_name << "\n";
-  //   }
-  // }
-  // std::cout << "_btopo_partitioned_pins: \n"; 
-  // for(const auto& partition : _btopo_partitioned_pins) {
-  //   std::cout << "partition: \n";
-  //   for(auto pin : partition) {
-  //     std::cout << pin->_name << "\n";
-  //   }
-  // }
-  /*
-   * ----------------------------------------------------
-   */
-
-  // assign isRep boolean value for each pin in _frontiers
-  for(auto pin : _frontiers) {
-    if(_popcount(pin->_bpartition_id) > 1) {
-      pin->_isbRep = true;
-    }
-    if(_popcount(pin->_fpartition_id) > 1) {
-      pin->_isfRep = true;
-    }
-  }
-  
-}
-
-void Timer::_build_partitioned_taskflow() {
-  std::vector<tf::Task> ftask(_ftopo_partitioned_pins.size());
-  std::vector<tf::Task> btask(_btopo_partitioned_pins.size());
-  int index = 0;
-  for(auto& pin_vec : _ftopo_partitioned_pins) {
-    ftask[index] = _taskflow.emplace([this, &pin_vec] () {
-      for(auto pin : pin_vec) {
-        // do ftask
-        if(pin->_isfRep) {
-          int cur_task_status = 0;
-          if(pin->_ftask_status.compare_exchange_strong(cur_task_status, 1)) {
-            _fprop_rc_timing(*pin); // 5 typical tasks for a p to update timing in forward propagation // most time consuming if p has net
-            _fprop_slew(*pin);
-            _fprop_delay(*pin);
-            _fprop_at(*pin);
-            _fprop_test(*pin);
-            pin->_ftask_status.store(2, std::memory_order_release);  
-          }
-          else { while(pin->_ftask_status.load(std::memory_order_acquire) != 2) {} }
-        }
-        else {
-          _fprop_rc_timing(*pin); // 5 typical tasks for a p to update timing in forward propagation // most time consuming if p has net
-          _fprop_slew(*pin);
-          _fprop_delay(*pin);
-          _fprop_at(*pin);
-          _fprop_test(*pin); 
-        }
-      }
-    });
-    index++;
-  }
-
-  index = 0;
-  for(auto& pin_vec : _btopo_partitioned_pins) {
-    btask[index] = _taskflow.emplace([this, &pin_vec] () {
-      for(auto pin : pin_vec) {
-        // do btask
-        if(pin->_isbRep) {
-          int cur_task_status = 0;
-          if(pin->_btask_status.compare_exchange_strong(cur_task_status, 1)) {
-            _bprop_rat(*pin); // 1 typical task for a p to update timing in backward progragation
-            pin->_btask_status.store(2, std::memory_order_release);
-          }
-          else { while(pin->_btask_status.load(std::memory_order_acquire) != 2) {} }
-        }
-        else {
-          _bprop_rat(*pin); // 1 typical task for a p to update timing in backward progragation
-        }
-      }
-    });
-    index++;
-  }
-
-  for(size_t i=0; i<_ftopo_partitioned_pins.size(); i++) {
-    ftask[i].precede(btask[i]);
-  }
 }
 
 void Timer::_execute_task_manually() {
-//  for(auto& pin_vec : _topo_partitioned_pins) {
-//    size_t ftask_count = 0;
-//    for(auto pin : pin_vec) {
-//      if(ftask_count < _fprop_cands.size()) {
-//        std::cerr << "executing ftask pin: " << pin->_name << "\n"; 
-//        _fprop_rc_timing(*pin); // 5 typical tasks for a p to update timing in forward propagation // most time consuming if p has net
-//        _fprop_slew(*pin);
-//        _fprop_delay(*pin);
-//        _fprop_at(*pin);
-//        _fprop_test(*pin);
-//        ftask_count++;
-//      }
-//      else {
-//        std::cerr << "executing btask pin: " << pin->_name << "\n"; 
-//        _bprop_rat(*pin); // 1 typical task for a p to update timing in backward progragation
-//      }
-//    }
-//  } 
-//
-//  // checker: check if topological order found is correct
-//  // set only 1 partition and 1 thread
-//  std::vector<Pin*> check_vector_topo;
-//  for(auto pin : _fprop_cands) {
-//    check_vector_topo.push_back(pin);
-//    std::cerr << "checking ftask pin: " << pin->_name << "\n"; 
-//  }
-//  for(auto pin : _bprop_cands) {
-//    check_vector_topo.push_back(pin);
-//    std::cerr << "checking btask pin: " << pin->_name << "\n"; 
-//  }
-//
-//  for(size_t i=0; i<check_vector_topo.size(); i++) {
-//    assertm(check_vector_topo[i] == _topo_partitioned_pins[0][i], "comparing the address of pin");
-//  }
 
-  /*
-  std::cout << "_frontiers.size: " << _frontiers.size() << "\n";
   for(auto pin : _fprop_cands) {
-    std::cerr << "executing ftask pin: " << pin->_name << "\n"; 
     _fprop_rc_timing(*pin); // 5 typical tasks for a p to update timing in forward propagation // most time consuming if p has net
     _fprop_slew(*pin);
     _fprop_delay(*pin);
@@ -2384,13 +2255,59 @@ void Timer::_execute_task_manually() {
     _fprop_test(*pin);
   }
   for(auto pin : _bprop_cands) {
-    std::cerr << "executing btask pin: " << pin->_name << "\n"; 
     _bprop_rat(*pin); // 1 typical task for a p to update timing in backward progragation
   }
-  */
 }
 
-std::string Timer::_uint32_to_string(const std::vector<uint32_t>& vec) {
+
+void Timer::_reset_repcut() {
+  
+  _bsink_pins.clear();
+  _fsink_pins.clear();
+ 
+  _fpin_clusters.clear();
+  _bpin_clusters.clear();
+
+  _fpartition.clear();
+  _bpartition.clear();
+
+  _fpin_clusters_weights.clear();
+  _fnode_clusters_indices.clear();
+  _fedge_clusters_indices.clear();
+  _bpin_clusters_weights.clear();
+  _bnode_clusters_indices.clear();
+  _bedge_clusters_indices.clear();
+  _fnode_clusters.clear();  
+  _fedge_clusters.clear();
+  _bnode_clusters.clear();  
+  _bedge_clusters.clear();
+
+
+  for(auto pin : _frontiers) {
+
+    pin->_fcone_id.clear();
+    pin->_bcone_id.clear();
+
+    pin->_fpartition_id = 0;
+    pin->_bpartition_id = 0;
+
+    pin->_fcone_id_string = "";
+    pin->_bcone_id_string = "";
+
+  }
+}
+
+
+
+// ------------------------------------------------------------- Helper Implementation ----------------------------------------------------
+void Timer::_bin_uint32(uint32_t n) const {
+
+  std::bitset<32> b(n);
+  std::cerr << b;
+
+}
+
+std::string Timer::_uint32_to_string(const std::vector<uint32_t>& vec) const {
   std::string result = "_";
   for(const auto& num : vec) {
     result += std::to_string(num) + "_";
@@ -2398,186 +2315,7 @@ std::string Timer::_uint32_to_string(const std::vector<uint32_t>& vec) {
   return result;
 }
 
-void Timer::_get_pin_clusters() {
-
-  auto start = std::chrono::steady_clock::now();
-  // make a copy of prop_cands 
-  std::vector<Pin*> fprop_cands_copy;
-  std::vector<Pin*> bprop_cands_copy;
-  for(auto pin : _fprop_cands) {
-    fprop_cands_copy.push_back(pin);
-  }
-  for(auto pin : _bprop_cands) {
-    bprop_cands_copy.push_back(pin);
-  }
-  auto end = std::chrono::steady_clock::now();
-  copy_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
-//
-//  start = std::chrono::steady_clock::now();
-//  // sort bprop_cands_copy
-//  _quicksort(bprop_cands_copy, 0, bprop_cands_copy.size()-1, true);
-//  // sort fprop_cands_copy
-//  _quicksort(fprop_cands_copy, 0, fprop_cands_copy.size()-1, false);
-//  end = std::chrono::steady_clock::now();
-//  quick_sort_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
-//
-  /*
-  std::vector<Pin*> fprop_cands_copy;
-  std::vector<Pin*> bprop_cands_copy;
-  std::sort(bprop_cands_copy.begin(), bprop_cands_copy.end(), [this] (Pin* a, Pin* b) {
-    return _comp_uint32_vector(a->_bcone_id, b->_bcone_id); 
-  });
-  std::sort(fprop_cands_copy.begin(), fprop_cands_copy.end(), [this] (Pin* a, Pin* b) {
-    return _comp_uint32_vector(a->_fcone_id, b->_fcone_id); 
-  });
-  */
-//
-//  // traverse bprop_cands_copy to get _pin_clusters
-//  _pin_clusters.push_back({bprop_cands_copy[0]});
-//  int index_pin_cluster = 0;
-//  for(size_t i=1; i<bprop_cands_copy.size(); i++) {
-//    if(bprop_cands_copy[i]->_bcone_id == bprop_cands_copy[i-1]->_bcone_id) {
-//      _pin_clusters[index_pin_cluster].push_back(bprop_cands_copy[i]);
-//    }
-//    else{
-//      _pin_clusters.push_back({bprop_cands_copy[i]});
-//      index_pin_cluster++;
-//    }
-//  }
-//  _num_bcone_id = _pin_clusters.size() - 1; // record _num_bcone_id for later filling up node_clusters and edge_clusters
-//                                            // _fcone_id will overlapped with _bcone_id, but it does not matter(-1 cuz index starts from 0)
-//
-//  std::vector<std::vector<uint32_t>> visited_cone;
-//  for(const auto& cluster : _pin_clusters) {
-//    visited_cone.push_back(cluster[0]->_bcone_id);
-//  }
- 
-  // traverse bprop_cands to fill up _pin_clusters
-  std::vector<std::vector<uint32_t>> visited_cone;
-  for(size_t i=0; i<bprop_cands_copy.size(); i++) {
-    auto it = std::find(visited_cone.begin(), visited_cone.end(), bprop_cands_copy[i]->_bcone_id);
-    if(it == visited_cone.end()) { 
-      _pin_clusters.push_back({bprop_cands_copy[i]});
-      visited_cone.push_back(bprop_cands_copy[i]->_bcone_id); 
-    }
-    else {
-      _pin_clusters[std::distance(visited_cone.begin(), it)].push_back(bprop_cands_copy[i]);
-    }
-  }
-  _num_bcone_id = _pin_clusters.size() - 1; // record _num_bcone_id for later filling up node_clusters and edge_clusters
-                                            // _fcone_id will overlapped with _bcone_id, but it does not matter(-1 cuz index starts from 0)
-
-  // traverse fprop_cands_copy to complete _pin_clusters
-  for(size_t i=0; i<fprop_cands_copy.size(); i++) {
-    auto it = std::find(visited_cone.begin(), visited_cone.end(), fprop_cands_copy[i]->_fcone_id);
-    if(it == visited_cone.end()) { 
-      _pin_clusters.push_back({fprop_cands_copy[i]});
-      visited_cone.push_back(fprop_cands_copy[i]->_fcone_id); 
-    }
-    else {
-      _pin_clusters[std::distance(visited_cone.begin(), it)].push_back(fprop_cands_copy[i]);
-    }
-  }
-
-  /*
-   * ----------------------------------------------------
-   * checker: check if _pin_clusters sorted is correct  
-   */
-  // std::cerr << "check _pin_clusters: \n";
-  // for(auto cluster : _pin_clusters) {
-  //   std::cerr << cluster[0]->_name << ": ";
-  //   std::string s = _uint32_to_string(cluster[0]->_bcone_id);
-  //   std::cerr << s << "\n";
-  // }
-
-  // std::cerr << "check visited_cone: \n";
-  // for(auto cone_id : visited_cone) {
-  //   std::string s = _uint32_to_string(cone_id);
-  //   std::cerr << s << "\n";
-  // }
-
-  /*
-   * ----------------------------------------------------
-   */
-}
-
-void Timer::_quicksort(std::vector<Pin*>& pin_cands, int low, int high, bool isbprop) {
-
-  if(low < high) {
-    int pi = _partition_qs(pin_cands, low, high, isbprop);
-    _quicksort(pin_cands, low, pi-1, isbprop);
-    _quicksort(pin_cands, pi+1, high, isbprop);
-  }
-
-}
-
-int Timer::_partition_qs(std::vector<Pin*>& pin_cands, int low, int high, bool isbprop) {
-
-  // Choosing the pivot
-  Pin* pivot = pin_cands[high];
-
-  // Index of smaller element and indicates
-  // the right position of pivot found so far
-  int i = (low - 1);
-
-  for (int j = low; j <= high - 1; j++) {
-    // If current element is smaller than the pivot
-    if(isbprop) {
-      if (_comp_uint32_vector(pin_cands[j]->_bcone_id, pivot->_bcone_id)) {
-        // Increment index of smaller element
-        i++;
-        std::swap(pin_cands[i], pin_cands[j]);
-      }
-    }
-    else {
-      if (_comp_uint32_vector(pin_cands[j]->_fcone_id, pivot->_fcone_id)) {
-        // Increment index of smaller element
-        i++;
-        std::swap(pin_cands[i], pin_cands[j]);
-      }
-    }
-  }
-  std::swap(pin_cands[i + 1], pin_cands[high]);
-  return (i + 1);
-};
-
-bool Timer::_comp_uint32_vector(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b) {
-
-  int length = a.size();
-  assert(a.size() != 0);
-  int count = length - 1;
-  while(count >= 0) {
-    if(a[count] < b[count]) {
-      return true;
-    }
-    count --;
-  }
-  return false;
-}
-
-void Timer::_bin_uint32(uint32_t n) {
-  /*
-  uint32_t i;
-  std::cerr << "0";
-  for (i = 1 << 30; i > 0; i = i / 2)
-  {
-    if((n & i) != 0)
-    {
-      std::cerr << "1";
-    }
-    else
-    {
-      std::cerr << "0";
-    }
-  }
-  */
-
-  std::bitset<32> b(n);
-  std::cerr << b;
-
-}
-
-bool Timer::_is_node_cluster(const Pin* p, bool isbcone) {
+bool Timer::_is_node_cluster(const Pin* p, bool isbcone) const{
   
   // traverse the cone_id (std::vector<uint32_t>)
   uint32_t result = 0;
@@ -2600,127 +2338,30 @@ bool Timer::_is_node_cluster(const Pin* p, bool isbcone) {
   }
 }
 
-void Timer::_reset_repcut() {
-  
-  _sink_pins.clear();
-  
-  for(auto pin : _frontiers) {
-    pin->_fcone_id.clear();
-    pin->_bcone_id.clear();
-    pin->_fpartition_id = 0;
-    pin->_bpartition_id = 0;
-    pin->_isfRep = false;
-    pin->_isbRep = false;
-    pin->_ftask_status = 0;
-    pin->_btask_status = 0;
-  }
-
-  _pin_clusters.clear();
-
-  _partition.clear();
-
-  _ftopo_partitioned_pins.clear();
-  _btopo_partitioned_pins.clear();
-
-  _num_ftask_partitions.clear();
-
-  _num_bcone_id = 0;
-}
-
-uint32_t Timer::_popcount(uint32_t number) {
+uint32_t Timer::_popcount(uint32_t number) const{
   uint32_t count = 0;
 
+  uint32_t num_copy = number;
  //calculate the total set bits in a number
- while (number){
-    count += number & 1;
-    number >>= 1;
+ while (num_copy){
+    count += num_copy & 1;
+    num_copy >>= 1;
  }
  return count;
 }
 
-void Timer::_check_mtkahypar() {
+bool Timer::_comp_uint32_vector(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b) {
 
-  // Initialize thread pool
-  mt_kahypar_initialize_thread_pool(
-    std::thread::hardware_concurrency() /* use all available cores */,
-    true /* activate interleaved NUMA allocation policy */ );
-
-  // In the following, we construct a hypergraph with 7 nodes and 4 hyperedges
-  const mt_kahypar_hypernode_id_t num_nodes = 4;
-  const mt_kahypar_hyperedge_id_t num_hyperedges = 3;
-
-  // The hyperedge indices points to the hyperedge vector and defines the
-  // the ranges containing the pins of each hyperedge
-  std::unique_ptr<size_t[]> hyperedge_indices = std::make_unique<size_t[]>(4);
-  hyperedge_indices[0] = 0; hyperedge_indices[1] = 2; hyperedge_indices[2] = 3;
-  hyperedge_indices[3] = 4; 
-
-  std::unique_ptr<mt_kahypar_hyperedge_id_t[]> hyperedges =
-    std::make_unique<mt_kahypar_hyperedge_id_t[]>(4);
-  hyperedges[0] = 0;  hyperedges[1] = 2;
-  hyperedges[2] = 1;  hyperedges[3] = 3; 
-  
-  // Define node weights
-  std::unique_ptr<mt_kahypar_hypernode_weight_t[]> node_weights =
-    std::make_unique<mt_kahypar_hypernode_weight_t[]>(4);
-  node_weights[0] = 1; node_weights[1] = 1; node_weights[2] = 1; node_weights[3] = 3;
-
-  // Define hyperedge weights
-  std::unique_ptr<mt_kahypar_hyperedge_weight_t[]> hyperedge_weights =
-    std::make_unique<mt_kahypar_hyperedge_weight_t[]>(4);
-  hyperedge_weights[0] = 1; hyperedge_weights[1] = 1;
-  hyperedge_weights[2] = 3;
-
-  // Construct hypergraph for DEFAULT preset
-  mt_kahypar_hypergraph_t hypergraph =
-    mt_kahypar_create_hypergraph(DEFAULT, num_nodes, num_hyperedges,
-      hyperedge_indices.get(), hyperedges.get(),
-      hyperedge_weights.get(), node_weights.get());
-
-  std::cout << "Number of Nodes            = " << mt_kahypar_num_hypernodes(hypergraph) << std::endl;
-  std::cout << "Number of Hyperedges       = " << mt_kahypar_num_hyperedges(hypergraph) << std::endl;
-  std::cout << "Number of Pins             = " << mt_kahypar_num_pins(hypergraph) << std::endl;
-  std::cout << "Total Weight of Hypergraph = " << mt_kahypar_hypergraph_weight(hypergraph) << std::endl;
-
-  // Setup partitioning context
-  mt_kahypar_context_t* context = mt_kahypar_context_new();
-  mt_kahypar_load_preset(context, DEFAULT /* corresponds to MT-KaHyPar-D */);
-  // In the following, we partition a hypergraph into two blocks
-  // with an allowed imbalance of 3% and optimize the connective metric (KM1)
-  mt_kahypar_set_partitioning_parameters(context,
-    2 /* number of blocks */, 0.03 /* imbalance parameter */,
-    KM1 /* objective function */, 42 /* seed */);
-  // Enable logging
-  mt_kahypar_set_context_parameter(context, VERBOSE, "1");
-
-  // Partition Hypergraph
-  mt_kahypar_partitioned_hypergraph_t partitioned_hg =
-    mt_kahypar_partition(hypergraph, context);
-
-  // Extract Partition
-  std::unique_ptr<mt_kahypar_partition_id_t[]> partition =
-    std::make_unique<mt_kahypar_partition_id_t[]>(mt_kahypar_num_hypernodes(hypergraph));
-  mt_kahypar_get_partition(partitioned_hg, partition.get());
-
-  // Extract Block Weights
-  std::unique_ptr<mt_kahypar_hypernode_weight_t[]> block_weights =
-    std::make_unique<mt_kahypar_hypernode_weight_t[]>(2);
-  mt_kahypar_get_block_weights(partitioned_hg, block_weights.get());
-
-  // Compute Metrics
-  const double imbalance = mt_kahypar_imbalance(partitioned_hg, context);
-  const double km1 = mt_kahypar_km1(partitioned_hg);
-
-  // Output Results
-  std::cout << "Partitioning Results:" << std::endl;
-  std::cout << "Imbalance         = " << imbalance << std::endl;
-  std::cout << "Km1               = " << km1 << std::endl;
-  std::cout << "Weight of Block 0 = " << block_weights[0] << std::endl;
-  std::cout << "Weight of Block 1 = " << block_weights[1] << std::endl;
-
-  mt_kahypar_free_context(context);
-  mt_kahypar_free_hypergraph(hypergraph);
-  mt_kahypar_free_partitioned_hypergraph(partitioned_hg);
+  int length = a.size();
+  assert(a.size() != 0);
+  int count = length - 1;
+  while(count >= 0) {
+    if(a[count] < b[count]) {
+      return true;
+    }
+    count --;
+  }
+  return false;
 }
 
 };  // end of namespace ot. -----------------------------------------------------------------------

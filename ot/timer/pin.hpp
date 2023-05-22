@@ -231,11 +231,8 @@ class Pin {
     uint32_t _fpartition_id {0};
     uint32_t _bpartition_id {0};
 
-    bool _isfRep {false};
-    bool _isbRep {false};
-
-    std::atomic<int> _ftask_status {0}; // 0 = haven't started, 1 = doing, 2 = done
-    std::atomic<int> _btask_status {0}; // 0 = haven't started, 1 = doing, 2 = done
+    std::string _fcone_id_string;
+    std::string _bcone_id_string;
     // --------------------------------RepCut Implementation--------------------------------------------------------
 }; 
 

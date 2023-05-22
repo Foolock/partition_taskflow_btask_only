@@ -52,12 +52,10 @@ class Timer {
 
     ~Timer() {
       
-      std::cerr << "partition time: " << partition_runtime << "\n";
-      std::cerr << "taskflow time: " << taskflow_runtime << "\n";
-      std::cerr << "cluster time: " << cluster_runtime << "\n";
-      std::cerr << "sorting time: " << sorting_runtime << "\n";
-      std::cerr << "copy time: " << copy_runtime << "\n";
-      std::cerr << "quick_sort time: " << quick_sort_runtime << "\n";
+      std::cerr << "build_cands_runtime : " << build_cands_runtime << "\n";
+      std::cerr << "cluster_runtime : " << cluster_runtime << "\n";
+      std::cerr << "partition_runtime : " << partition_runtime << "\n";
+      std::cerr << "process_cluster_runtime : " << process_cluster_runtime << "\n";
     }
 
     // Builder
@@ -339,85 +337,79 @@ class Timer {
 
     // --------------------------------RepCut Implementation--------------------------------------------------------
  
-    // partition runtime
+    // build_cands_runtime
+    size_t build_cands_runtime = 0;
+    
+    // cluster_runtime
+    size_t cluster_runtime = 0;
+
+    // process cluster time
+    size_t process_cluster_runtime = 0;
+
+    // partition_runtime
     size_t partition_runtime = 0;
     
-    size_t taskflow_runtime = 0;
-    
-    size_t cluster_runtime = 0;
-    
-    size_t sorting_runtime = 0;
-    
-    size_t copy_runtime = 0;
-    
-    size_t quick_sort_runtime = 0;
+    // pins of sink tasks in btask and ftask _taskflow
+    std::vector<Pin*> _bsink_pins;
+    std::vector<Pin*> _fsink_pins;
+   
+    // pin clusters for ftask and btask
+    std::vector<std::vector<Pin*>> _fpin_clusters; 
+    std::vector<std::vector<Pin*>> _bpin_clusters; 
 
-    // pins of sink tasks in _taskflow
-    std::vector<Pin*> _sink_pins;
-
-    // cluster of pins
-    std::vector<std::vector<Pin*>> _pin_clusters;
-  
-    // mt-kahypar partition parameters
-    mt_kahypar_partition_id_t _num_partition = 16; // number of partitions 
-    const double _im = 0.03; // imbalance parameter
+    // results from _process_clusters;
+    std::vector<size_t> _fpin_clusters_weights;
+    std::vector<size_t> _fnode_clusters_indices;
+    std::vector<size_t> _fedge_clusters_indices;
+    std::vector<size_t> _bpin_clusters_weights;
+    std::vector<size_t> _bnode_clusters_indices;
+    std::vector<size_t> _bedge_clusters_indices;
+    std::vector<std::vector<Pin*>> _fnode_clusters;  
+    std::vector<std::vector<Pin*>> _fedge_clusters;
+    std::vector<std::vector<Pin*>> _bnode_clusters;  
+    std::vector<std::vector<Pin*>> _bedge_clusters;
 
     // partition results
-    std::vector<int> _partition;
+    std::vector<int> _fpartition;
+    std::vector<int> _bpartition;
 
-    // topologically sorted from top to bottom of unpartitioned _taskflow pins of each partition
-    std::vector<std::vector<Pin*>> _ftopo_partitioned_pins;
-    std::vector<std::vector<Pin*>> _btopo_partitioned_pins;
-
-    std::vector<size_t> _num_ftask_partitions;
+    // mt-kahypar partition parameters
+    const mt_kahypar_partition_id_t _set_num_partition = 16; // number of partitions 
+    const double _im = 0.03; // imbalance parameter
 
     // cluster the taskflow graph
     void _cluster_graph();
-
-    // get partition
-    void _get_partition();
-
-    // get topological order of partitioned tasks
-    void _get_topo_order();
-
-    // build partitioned _taskflow 
-    void _build_partitioned_taskflow();
-
+ 
     // reset RepCut used variables
     void _reset_repcut();
 
     // execute the task manually to check DAG correctness
     void _execute_task_manually();
-   
-    // get _pin_clusters
+
+    // get pin_clusters
     void _get_pin_clusters();
 
-    // helper: transfer std::vector<uint32_t> into a std::string (with each uint32_t seperated by "_")
-    std::string _uint32_to_string(const std::vector<uint32_t>& vec);
-
-    // helper: print bit value of uint32
-    void _bin_uint32(uint32_t n);
-
-    // helper: quick sort 
-    void _quicksort(std::vector<Pin*>& pin_cands, int low, int high, bool isbprop); // isbprop = true, use pin->bcone_id, else, use pin->fcone_id
-
-    // helper: partition for quick sort
-    int _partition_qs(std::vector<Pin*>& pin_cands, int low, int high, bool isbprop); 
+    // get partitions
+    void _get_fpartitions();
+    void _get_bpartitions();
     
-    // helper: comparator of 2 std::vector<uint32_t>, return true if a < b 
+    // process clusters: classify clusters into node and edge clusters and get their weights
+    void _process_clusters();
+
+    // helper: print binary form of uint32
+    void _bin_uint32(uint32_t n) const;
+
+    // helper: print string form of std::vector<uint32_t>
+    std::string _uint32_to_string(const std::vector<uint32_t>& vec) const;
+
+    // helper: check if a cluster is node cluster, isbcone = true, check bcone_id
+    bool _is_node_cluster(const Pin* p, bool isbcone) const;
+
+    // helper: count the number of 1s in uint32
+    uint32_t _popcount(uint32_t number) const;
+
+    // helper: comparator for std::vector<uint32_t>, if a < b, return true
     bool _comp_uint32_vector(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b);
-    
-    // helper: check if a cluster is node cluster whose cone_id vector is power of 2 
-    // the input is a pin of this cluster, a boolean value isforward(1 = check fcone_id, 0 = check bcone_id)
-    size_t _num_bcone_id {0}; // when checking _pin_clusters, within _num_bcone_id, isforward is set to be false
-    bool _is_node_cluster(const Pin* p, bool isbcone);
-
-    // helper: pop_count(), return true if count > 1 else return false
-    uint32_t _popcount(uint32_t number);
-
-    // helper: check functionality of mt-kahypar
-    void _check_mtkahypar();
-
     // --------------------------------RepCut Implementation--------------------------------------------------------
 };
 

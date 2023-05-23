@@ -15,13 +15,17 @@ int main(int argc, char* argv[]) {
   std::filesystem::path stdout_path;
   std::filesystem::path stderr_path;
   std::filesystem::path log_path;
+  size_t num_partitions = 1;
+  size_t num_threads = std::thread::hardware_concurrency();
 
-  app.add_flag  ("-q,--quiet",   flag_quiet,   "do not print the welcome on startup");
-  app.add_flag  ("-v,--version", flag_version, "print version information and exit");
-  app.add_option("-i,--stdin",   stdin_path,   "redirect stdin to a file");
-  app.add_option("-o,--stdout",  stdout_path,  "redirect stdout to a file");
-  app.add_option("-e,--stderr",  stderr_path,  "redirect stderr to a file");
-  app.add_option("--log",        log_path,     "redirect logging to a file");
+  app.add_flag  ("-q,--quiet",   flag_quiet,     "do not print the welcome on startup");
+  app.add_flag  ("-v,--version", flag_version,   "print version information and exit");
+  app.add_option("-i,--stdin",   stdin_path,     "redirect stdin to a file");
+  app.add_option("-o,--stdout",  stdout_path,    "redirect stdout to a file");
+  app.add_option("-e,--stderr",  stderr_path,    "redirect stderr to a file");
+  app.add_option("--log",        log_path,       "redirect logging to a file");
+  app.add_option("-p",           num_partitions, "set number of partitions");
+  app.add_option("-t",           num_threads,    "set number of partitions");
 
   try {
     app.parse(argc, argv);
@@ -57,7 +61,7 @@ int main(int argc, char* argv[]) {
   }
 
   // Launch the OpenTimer shell
-  ot::Shell(flag_quiet ? "" : ot::welcome, is, os, es)();
+  ot::Shell(flag_quiet ? "" : ot::welcome, is, os, es, num_partitions, num_threads)();
 
   // close the input stream
   if(is != stdin) {

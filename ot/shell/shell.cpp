@@ -3,11 +3,14 @@
 namespace ot {
 
 // Constructor
-Shell::Shell(const std::string& w, FILE* is, std::ostream& os, std::ostream& es) :
+Shell::Shell(const std::string& w, FILE* is, std::ostream& os, std::ostream& es, size_t num_partitions, size_t num_threads) :
   _os     {os},
   _es     {es},
   _prompt {w, "ot> ", ot::user_home() / ".ot_history", is, os, es} {
-  
+ 
+//  _timer._set_num_partition = num_partitions;
+//  _timer._num_threads = num_threads;
+
   // Add auto-complete
   for(const auto& kvp : _handles) {
     _prompt.autocomplete(kvp.first);

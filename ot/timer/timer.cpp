@@ -1043,8 +1043,10 @@ void Timer::_update_timing() {
   
   // get partitions 
   start = std::chrono::steady_clock::now(); 
+  std::cout.setstate(std::ios_base::failbit);
   _get_fpartitions();
   _get_bpartitions();
+  std::cout.clear();
   end = std::chrono::steady_clock::now();
   partition_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
 
@@ -1053,6 +1055,9 @@ void Timer::_update_timing() {
 
   // build partitioned taskflow
   _build_partitioned_taskflow();
+
+  // get overlap profile
+  _get_overlap_profile();
 
   // Execute the task
   start = std::chrono::steady_clock::now();
@@ -2537,11 +2542,13 @@ void Timer::_get_topo_order() {
     _btopo_partitioned_pins.push_back(one_partition_pins);
   }
 
-  // assign isRep boolean value for each pin in _frontiers
-  for(auto pin : _frontiers) {
+  // assign isRep boolean value for each pin in _bprop_cands and _fprop_cands 
+  for(auto pin : _bprop_cands) {
     if(_popcount(pin->_bpartition_id) > 1) {
       pin->_isbRep = true;
     }
+  }
+  for(auto pin : _fprop_cands) {
     if(_popcount(pin->_fpartition_id) > 1) {
       pin->_isfRep = true;
     }
@@ -2734,6 +2741,35 @@ bool Timer::_comp_uint32_vector(const std::vector<uint32_t>& a, const std::vecto
     count --;
   }
   return false;
+}
+
+void Timer::_get_overlap_profile() {
+
+  // traverse _bprop_cands and _fprop_cands to check if a task is replicate
+  int ftotal_task = 0;
+  int frep_task = 0;
+  for(auto pin : _fprop_cands) {
+    if(pin->_isfRep) {
+      frep_task++;
+    }
+    ftotal_task++;
+  }
+  int btotal_task = 0;
+  int brep_task = 0;
+  for(auto pin : _bprop_cands) {
+    if(pin->_isbRep) {
+      brep_task++;
+    }
+    btotal_task++;
+  }
+  std::cout << "--------------------------------\n";
+  std::cout << "number of replication ftasks: " << frep_task << "\n";
+  std::cout << "number of ftotal tasks: " << ftotal_task << "\n";
+  std::cout << "ftask replication rate: " << static_cast<double>(frep_task)/static_cast<double>(ftotal_task)*100 << "%\n";
+  std::cout << "number of replication btasks: " << brep_task << "\n";
+  std::cout << "number of btotal tasks: " << btotal_task << "\n";
+  std::cout << "btask replication rate: " << static_cast<double>(brep_task)/static_cast<double>(btotal_task)*100 << "%\n";
+
 }
 
 };  // end of namespace ot. -----------------------------------------------------------------------

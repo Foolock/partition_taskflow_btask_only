@@ -1,0 +1,193 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+BACKSPACE	prompt.hpp	/^  BACKSPACE =  127    \/* Backspace *\/$/;"	m	class:prompt::KEY
+BLACK	prompt.hpp	/^  BLACK = 30,$/;"	m	class:prompt::KEY::COLOR
+BLUE	prompt.hpp	/^  BLUE,$/;"	m	class:prompt::KEY::COLOR
+COLOR	prompt.hpp	/^enum class COLOR{$/;"	c	class:prompt::KEY
+CTRL_A	prompt.hpp	/^  CTRL_A   = 1,       \/* Ctrl+a    *\/$/;"	m	class:prompt::KEY
+CTRL_B	prompt.hpp	/^  CTRL_B   = 2,       \/* Ctrl-b    *\/$/;"	m	class:prompt::KEY
+CTRL_C	prompt.hpp	/^  CTRL_C   = 3,       \/* Ctrl-c    *\/$/;"	m	class:prompt::KEY
+CTRL_D	prompt.hpp	/^  CTRL_D   = 4,       \/* Ctrl-d    *\/$/;"	m	class:prompt::KEY
+CTRL_E	prompt.hpp	/^  CTRL_E   = 5,       \/* Ctrl-e    *\/$/;"	m	class:prompt::KEY
+CTRL_F	prompt.hpp	/^  CTRL_F   = 6,       \/* Ctrl-f    *\/$/;"	m	class:prompt::KEY
+CTRL_H	prompt.hpp	/^  CTRL_H   = 8,       \/* Ctrl-h    *\/$/;"	m	class:prompt::KEY
+CTRL_K	prompt.hpp	/^  CTRL_K   = 11,      \/* Ctrl+k    *\/$/;"	m	class:prompt::KEY
+CTRL_L	prompt.hpp	/^  CTRL_L   = 12,      \/* Ctrl+l    *\/$/;"	m	class:prompt::KEY
+CTRL_N	prompt.hpp	/^  CTRL_N   = 14,      \/* Ctrl-n    *\/$/;"	m	class:prompt::KEY
+CTRL_P	prompt.hpp	/^  CTRL_P   = 16,      \/* Ctrl-p    *\/$/;"	m	class:prompt::KEY
+CTRL_T	prompt.hpp	/^  CTRL_T   = 20,      \/* Ctrl-t    *\/$/;"	m	class:prompt::KEY
+CTRL_U	prompt.hpp	/^  CTRL_U   = 21,      \/* Ctrl+u    *\/$/;"	m	class:prompt::KEY
+CTRL_W	prompt.hpp	/^  CTRL_W   = 23,      \/* Ctrl+w    *\/$/;"	m	class:prompt::KEY
+CYAN	prompt.hpp	/^  CYAN,$/;"	m	class:prompt::KEY::COLOR
+ENTER	prompt.hpp	/^  ENTER    = 13,      \/* Enter     *\/$/;"	m	class:prompt::KEY
+ESC	prompt.hpp	/^  ESC      = 27,      \/* Escape    *\/$/;"	m	class:prompt::KEY
+GREEN	prompt.hpp	/^  GREEN,$/;"	m	class:prompt::KEY::COLOR
+KEY	prompt.hpp	/^enum class KEY{$/;"	c	namespace:prompt
+KEY_NULL	prompt.hpp	/^  KEY_NULL = 0,       \/* NULL      *\/$/;"	m	class:prompt::KEY
+LineInfo	prompt.hpp	/^  struct LineInfo{$/;"	s	class:prompt::KEY::Prompt
+MAGNETA	prompt.hpp	/^  MAGNETA,$/;"	m	class:prompt::KEY::COLOR
+Node	prompt.hpp	/^    struct Node {$/;"	s	class:prompt::RadixTree
+OT_SHELL_SHELL_HPP_	shell.hpp	2;"	d
+PROMPT_HPP_	prompt.hpp	24;"	d
+Prompt	prompt.hpp	/^class Prompt {$/;"	c	class:prompt::KEY
+Prompt	prompt.hpp	/^inline Prompt::Prompt($/;"	f	class:prompt::KEY::Prompt
+RED	prompt.hpp	/^  RED,$/;"	m	class:prompt::KEY::COLOR
+RadixTree	prompt.hpp	/^RadixTree<C>::RadixTree(const std::vector<C>& words){$/;"	f	class:prompt::RadixTree
+RadixTree	prompt.hpp	/^class RadixTree{$/;"	c	namespace:prompt
+Shell	shell.cpp	/^Shell::Shell(const std::string& w, FILE* is, std::ostream& os, std::ostream& es) :$/;"	f	class:ot::Shell
+Shell	shell.hpp	/^class Shell {$/;"	c	namespace:ot
+TAB	prompt.hpp	/^  TAB      = 9,       \/* Tab       *\/$/;"	m	class:prompt::KEY
+YELLOW	prompt.hpp	/^  YELLOW,$/;"	m	class:prompt::KEY::COLOR
+_add_history	prompt.hpp	/^inline void Prompt::_add_history(const std::string &hist){$/;"	f	class:prompt::KEY::Prompt
+_append_character	prompt.hpp	/^inline bool Prompt::_append_character(LineInfo& line, char c){$/;"	f	class:prompt::KEY::Prompt
+_autocomplete_command	prompt.hpp	/^inline void Prompt::_autocomplete_command(){$/;"	f	class:prompt::KEY::Prompt
+_autocomplete_folder	prompt.hpp	/^inline void Prompt::_autocomplete_folder(){$/;"	f	class:prompt::KEY::Prompt
+_autocomplete_iterate_command	prompt.hpp	/^inline int Prompt::_autocomplete_iterate_command(){$/;"	f	class:prompt::KEY::Prompt
+_cat	misc.cpp	/^void Shell::_cat() {$/;"	f	class:ot::Shell
+_cd	misc.cpp	/^void Shell::_cd() {$/;"	f	class:ot::Shell
+_cerr	prompt.hpp	/^    std::ostream& _cerr;$/;"	m	class:prompt::KEY::Prompt
+_clear	misc.cpp	/^void Shell::_clear() {$/;"	f	class:ot::Shell
+_clear_screen	prompt.hpp	/^inline void Prompt::_clear_screen() {$/;"	f	class:prompt::KEY::Prompt
+_connect_pin	builder.cpp	/^void Shell::_connect_pin() {$/;"	f	class:ot::Shell
+_cout	prompt.hpp	/^    std::ostream& _cout;$/;"	m	class:prompt::KEY::Prompt
+_cppr	builder.cpp	/^void Shell::_cppr() {$/;"	f	class:ot::Shell
+_disable_cppr	builder.cpp	/^void Shell::_disable_cppr() {$/;"	f	class:ot::Shell
+_disable_raw_mode	prompt.hpp	/^inline void Prompt::_disable_raw_mode(){$/;"	f	class:prompt::KEY::Prompt
+_disconnect_pin	builder.cpp	/^void Shell::_disconnect_pin() {$/;"	f	class:ot::Shell
+_dump	prompt.hpp	/^void RadixTree<C>::_dump(const Node& n, size_t level, C& s) const {$/;"	f	class:prompt::RadixTree
+_dump_at	dump.cpp	/^void Shell::_dump_at() {$/;"	f	class:ot::Shell
+_dump_celllib	dump.cpp	/^void Shell::_dump_celllib() {$/;"	f	class:ot::Shell
+_dump_files	prompt.hpp	/^inline std::string Prompt::_dump_files($/;"	f	class:prompt::KEY::Prompt
+_dump_graph	dump.cpp	/^void Shell::_dump_graph() {$/;"	f	class:ot::Shell
+_dump_help	dump.cpp	/^void Shell::_dump_help() {$/;"	f	class:ot::Shell
+_dump_license	dump.cpp	/^void Shell::_dump_license() {$/;"	f	class:ot::Shell
+_dump_net_load	dump.cpp	/^void Shell::_dump_net_load() {$/;"	f	class:ot::Shell
+_dump_options	prompt.hpp	/^inline std::string Prompt::_dump_options(const std::vector<std::string>& opts){$/;"	f	class:prompt::KEY::Prompt
+_dump_pin_cap	dump.cpp	/^void Shell::_dump_pin_cap() {$/;"	f	class:ot::Shell
+_dump_power	dump.cpp	/^void Shell::_dump_power() {$/;"	f	class:ot::Shell
+_dump_rat	dump.cpp	/^void Shell::_dump_rat() {$/;"	f	class:ot::Shell
+_dump_rctree	dump.cpp	/^void Shell::_dump_rctree() {$/;"	f	class:ot::Shell
+_dump_slack	dump.cpp	/^void Shell::_dump_slack() {$/;"	f	class:ot::Shell
+_dump_slew	dump.cpp	/^void Shell::_dump_slew() {$/;"	f	class:ot::Shell
+_dump_spef	dump.cpp	/^void Shell::_dump_spef() {$/;"	f	class:ot::Shell
+_dump_taskflow	dump.cpp	/^void Shell::_dump_taskflow() {$/;"	f	class:ot::Shell
+_dump_timer	dump.cpp	/^void Shell::_dump_timer() {$/;"	f	class:ot::Shell
+_dump_verilog	dump.cpp	/^void Shell::_dump_verilog() {$/;"	f	class:ot::Shell
+_dump_version	dump.cpp	/^void Shell::_dump_version() {$/;"	f	class:ot::Shell
+_echo	misc.cpp	/^void Shell::_echo() {$/;"	f	class:ot::Shell
+_edit_line	prompt.hpp	/^inline void Prompt::_edit_line(std::string &s){$/;"	f	class:prompt::KEY::Prompt
+_enable_cppr	builder.cpp	/^void Shell::_enable_cppr() {$/;"	f	class:ot::Shell
+_es	shell.hpp	/^    std::ostream& _es;$/;"	m	class:ot::Shell
+_exec_ops	obselete.cpp	/^void Shell::_exec_ops() {$/;"	f	class:ot::Shell
+_files_in_folder	prompt.hpp	/^inline std::vector<std::string> Prompt::_files_in_folder($/;"	f	class:prompt::KEY::Prompt
+_files_match_prefix	prompt.hpp	/^inline std::vector<std::string> Prompt::_files_match_prefix($/;"	f	class:prompt::KEY::Prompt
+_get_cursor_pos	prompt.hpp	/^inline int Prompt::_get_cursor_pos(){$/;"	f	class:prompt::KEY::Prompt
+_has_read_access	prompt.hpp	/^inline bool Prompt::_has_read_access(const std::filesystem::path &path) const {$/;"	f	class:prompt::KEY::Prompt
+_head	misc.cpp	/^void Shell::_head() {$/;"	f	class:ot::Shell
+_history	prompt.hpp	/^    std::list<std::string> _history;$/;"	m	class:prompt::KEY::Prompt
+_history_path	prompt.hpp	/^    std::filesystem::path _history_path;$/;"	m	class:prompt::KEY::Prompt
+_init_timer	obselete.cpp	/^void Shell::_init_timer() {$/;"	f	class:ot::Shell
+_insert	prompt.hpp	/^void RadixTree<C>::_insert(std::basic_string_view<value_type, traits_type> sv, Node& n){$/;"	f	class:prompt::RadixTree
+_insert_gate	builder.cpp	/^void Shell::_insert_gate() {$/;"	f	class:ot::Shell
+_insert_net	builder.cpp	/^void Shell::_insert_net() {$/;"	f	class:ot::Shell
+_is	prompt.hpp	/^    FILE* _is;$/;"	m	class:prompt::KEY::Prompt
+_is	shell.hpp	/^    std::istringstream _is;$/;"	m	class:ot::Shell
+_key_backspace	prompt.hpp	/^inline void Prompt::_key_backspace(LineInfo &line){$/;"	f	class:prompt::KEY::Prompt
+_key_delete	prompt.hpp	/^inline void Prompt::_key_delete(LineInfo &line){$/;"	f	class:prompt::KEY::Prompt
+_key_delete_prev_word	prompt.hpp	/^inline void Prompt::_key_delete_prev_word(LineInfo& line){$/;"	f	class:prompt::KEY::Prompt
+_key_handle_CSI	prompt.hpp	/^inline bool Prompt::_key_handle_CSI(LineInfo& line){ $/;"	f	class:prompt::KEY::Prompt
+_key_history	prompt.hpp	/^inline void Prompt::_key_history(LineInfo &line, bool prev){$/;"	f	class:prompt::KEY::Prompt
+_key_next_history	prompt.hpp	/^inline void Prompt::_key_next_history(LineInfo& line){$/;"	f	class:prompt::KEY::Prompt
+_key_prev_history	prompt.hpp	/^inline void Prompt::_key_prev_history(LineInfo& line){$/;"	f	class:prompt::KEY::Prompt
+_line	prompt.hpp	/^    LineInfo _line;$/;"	m	class:prompt::KEY::Prompt
+_line	shell.hpp	/^    std::string _line;$/;"	m	class:ot::Shell
+_line_save	prompt.hpp	/^    LineInfo _line_save;$/;"	m	class:prompt::KEY::Prompt
+_load_history	prompt.hpp	/^inline void Prompt::_load_history(){$/;"	f	class:prompt::KEY::Prompt
+_ls	misc.cpp	/^void Shell::_ls() {$/;"	f	class:ot::Shell
+_match_prefix	prompt.hpp	/^void RadixTree<C>::_match_prefix($/;"	f	class:prompt::RadixTree
+_next_prefix	prompt.hpp	/^inline std::string Prompt::_next_prefix(const std::vector<std::string>& words, const size_t n){$/;"	f	class:prompt::KEY::Prompt
+_obuf	prompt.hpp	/^    std::string _obuf;      \/\/ Buffer for _refresh_single_line$/;"	m	class:prompt::KEY::Prompt
+_op	shell.hpp	/^    std::string _op;$/;"	m	class:ot::Shell
+_orig_termios	prompt.hpp	/^    termios _orig_termios;$/;"	m	class:prompt::KEY::Prompt
+_os	shell.hpp	/^    std::ostream& _os;$/;"	m	class:ot::Shell
+_prompt	prompt.hpp	/^    std::string _prompt;  $/;"	m	class:prompt::KEY::Prompt
+_prompt	shell.hpp	/^    prompt::Prompt _prompt;$/;"	m	class:ot::Shell
+_pwd	misc.cpp	/^void Shell::_pwd() {$/;"	f	class:ot::Shell
+_read_celllib	builder.cpp	/^void Shell::_read_celllib() {$/;"	f	class:ot::Shell
+_read_sdc	builder.cpp	/^void Shell::_read_sdc() {$/;"	f	class:ot::Shell
+_read_spef	builder.cpp	/^void Shell::_read_spef() {$/;"	f	class:ot::Shell
+_read_timing	builder.cpp	/^void Shell::_read_timing() {$/;"	f	class:ot::Shell
+_read_verilog	builder.cpp	/^void Shell::_read_verilog() {$/;"	f	class:ot::Shell
+_refresh_single_line	prompt.hpp	/^inline void Prompt::_refresh_single_line(LineInfo &l){$/;"	f	class:prompt::KEY::Prompt
+_remove_gate	builder.cpp	/^void Shell::_remove_gate() {$/;"	f	class:ot::Shell
+_remove_net	builder.cpp	/^void Shell::_remove_net() {$/;"	f	class:ot::Shell
+_report_area	action.cpp	/^void Shell::_report_area() {$/;"	f	class:ot::Shell
+_report_at	action.cpp	/^void Shell::_report_at() {$/;"	f	class:ot::Shell
+_report_fep	action.cpp	/^void Shell::_report_fep() {$/;"	f	class:ot::Shell
+_report_leakage_power	action.cpp	/^void Shell::_report_leakage_power() {$/;"	f	class:ot::Shell
+_report_path	action.cpp	/^void Shell::_report_path() {$/;"	f	class:ot::Shell
+_report_rat	action.cpp	/^void Shell::_report_rat() {$/;"	f	class:ot::Shell
+_report_slack	action.cpp	/^void Shell::_report_slack() {$/;"	f	class:ot::Shell
+_report_slew	action.cpp	/^void Shell::_report_slew() {$/;"	f	class:ot::Shell
+_report_timer	obselete.cpp	/^void Shell::_report_timer() {$/;"	f	class:ot::Shell
+_report_timing	action.cpp	/^void Shell::_report_timing() {$/;"	f	class:ot::Shell
+_report_tns	action.cpp	/^void Shell::_report_tns() {$/;"	f	class:ot::Shell
+_report_wns	action.cpp	/^void Shell::_report_wns() {$/;"	f	class:ot::Shell
+_repower_gate	builder.cpp	/^void Shell::_repower_gate() {$/;"	f	class:ot::Shell
+_rm	misc.cpp	/^void Shell::_rm() {$/;"	f	class:ot::Shell
+_root	prompt.hpp	/^   Node _root;$/;"	m	class:prompt::RadixTree
+_save_history	prompt.hpp	/^inline void Prompt::_save_history(){$/;"	f	class:prompt::KEY::Prompt
+_save_orig_termios	prompt.hpp	/^inline bool Prompt::_save_orig_termios(int fd){$/;"	f	class:prompt::KEY::Prompt
+_search_prefix_node	prompt.hpp	/^std::pair<const typename RadixTree<C>::Node*, C> RadixTree<C>::_search_prefix_node($/;"	f	class:prompt::RadixTree
+_set_at	builder.cpp	/^void Shell::_set_at() {$/;"	f	class:ot::Shell
+_set_early_celllib_fpath	obselete.cpp	/^void Shell::_set_early_celllib_fpath() {$/;"	f	class:ot::Shell
+_set_late_celllib_fpath	obselete.cpp	/^void Shell::_set_late_celllib_fpath() {$/;"	f	class:ot::Shell
+_set_load	builder.cpp	/^void Shell::_set_load() {$/;"	f	class:ot::Shell
+_set_num_threads	builder.cpp	/^void Shell::_set_num_threads() {$/;"	f	class:ot::Shell
+_set_rat	builder.cpp	/^void Shell::_set_rat() {$/;"	f	class:ot::Shell
+_set_raw_mode	prompt.hpp	/^inline bool Prompt::_set_raw_mode(){$/;"	f	class:prompt::KEY::Prompt
+_set_slew	builder.cpp	/^void Shell::_set_slew() {$/;"	f	class:ot::Shell
+_set_spef_fpath	obselete.cpp	/^void Shell::_set_spef_fpath() {$/;"	f	class:ot::Shell
+_set_timing_fpath	obselete.cpp	/^void Shell::_set_timing_fpath() {$/;"	f	class:ot::Shell
+_set_units	builder.cpp	/^void Shell::_set_units() {$/;"	f	class:ot::Shell
+_set_verilog_fpath	obselete.cpp	/^void Shell::_set_verilog_fpath() {$/;"	f	class:ot::Shell
+_stdin_not_tty	prompt.hpp	/^inline bool Prompt::_stdin_not_tty(std::string& s){$/;"	f	class:prompt::KEY::Prompt
+_tail	misc.cpp	/^void Shell::_tail() {$/;"	f	class:ot::Shell
+_terminal_columns	prompt.hpp	/^inline size_t Prompt::_terminal_columns(){$/;"	f	class:prompt::KEY::Prompt
+_timer	shell.hpp	/^    Timer _timer;$/;"	m	class:ot::Shell
+_tree	prompt.hpp	/^    RadixTree<std::string> _tree;  \/\/ Radix tree for command autocomplete$/;"	m	class:prompt::KEY::Prompt
+_unsupported_term	prompt.hpp	/^inline bool Prompt::_unsupported_term(){$/;"	f	class:prompt::KEY::Prompt
+_update_timing	action.cpp	/^void Shell::_update_timing() {$/;"	f	class:ot::Shell
+_user_home	prompt.hpp	/^inline std::filesystem::path Prompt::_user_home() const{$/;"	f	class:prompt::KEY::Prompt
+_which	misc.cpp	/^void Shell::_which() {$/;"	f	class:ot::Shell
+all_words	prompt.hpp	/^std::vector<C> RadixTree<C>::all_words() const {$/;"	f	class:prompt::RadixTree
+autocomplete	prompt.hpp	/^inline void Prompt::autocomplete(const std::string& word){$/;"	f	class:prompt::KEY::Prompt
+buf	prompt.hpp	/^    std::string buf;$/;"	m	struct:prompt::KEY::Prompt::LineInfo
+children	prompt.hpp	/^      std::list<std::pair<C, std::unique_ptr<Node>>> children;$/;"	m	struct:prompt::RadixTree::Node
+count_prefix	prompt.hpp	/^constexpr size_t count_prefix($/;"	f	namespace:prompt
+dump	prompt.hpp	/^C RadixTree<C>::dump() const {$/;"	f	class:prompt::RadixTree
+exist	prompt.hpp	/^bool RadixTree<C>::exist(std::basic_string_view<value_type, traits_type> s) const {$/;"	f	class:prompt::RadixTree
+history_size	prompt.hpp	/^    size_t history_size() const { return _history.size(); };$/;"	f	class:prompt::KEY::Prompt
+insert	prompt.hpp	/^void RadixTree<C>::insert(const C& s){$/;"	f	class:prompt::RadixTree
+match_prefix	prompt.hpp	/^std::vector<C> RadixTree<C>::match_prefix(const C& prefix) const {$/;"	f	class:prompt::RadixTree
+operator ()	shell.cpp	/^void Shell::operator()() {  $/;"	f	class:ot::Shell
+operator =	prompt.hpp	/^inline void Prompt::LineInfo::operator = (const LineInfo& l){$/;"	f	class:prompt::KEY::Prompt::LineInfo
+ot	action.cpp	/^namespace ot {$/;"	n	file:
+ot	builder.cpp	/^namespace ot {$/;"	n	file:
+ot	dump.cpp	/^namespace ot {$/;"	n	file:
+ot	misc.cpp	/^namespace ot {$/;"	n	file:
+ot	obselete.cpp	/^namespace ot {$/;"	n	file:
+ot	shell.cpp	/^namespace ot {$/;"	n	file:
+ot	shell.hpp	/^namespace ot {$/;"	n
+prompt	prompt.hpp	/^namespace prompt {$/;"	n
+read_line	prompt.hpp	/^bool read_line($/;"	f	namespace:prompt
+readline	prompt.hpp	/^inline bool Prompt::readline(std::string& s) {$/;"	f	class:prompt::KEY::Prompt
+reset	prompt.hpp	/^    inline void reset(){ $/;"	f	struct:prompt::KEY::Prompt::LineInfo
+root	prompt.hpp	/^const typename RadixTree<C>::Node& RadixTree<C>::root() const{$/;"	f	class:prompt::RadixTree
+set_history_size	prompt.hpp	/^inline void Prompt::set_history_size(size_t new_size){$/;"	f	class:prompt::KEY::Prompt
+welcome	shell.hpp	/^inline const std::string welcome = "\\$/;"	m	namespace:ot
+~Prompt	prompt.hpp	/^inline Prompt::~Prompt(){$/;"	f	class:prompt::KEY::Prompt

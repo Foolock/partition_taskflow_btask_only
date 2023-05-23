@@ -42,21 +42,24 @@ class Timer {
   public:
    
     Timer() {
-      
-    // Initialize thread pool for mt-kahypar
-    mt_kahypar_initialize_thread_pool(
-      std::thread::hardware_concurrency() /* multi-thread has bug??? */,
-      true /* activate interleaved NUMA allocation policy */ ); 
-    
+
+//      std::cout << "_set_num_partition: " << _set_num_partition << "\n";
+//      std::cout << "_num_threads: " << _num_threads << "\n";
+
+      // Initialize thread pool for mt-kahypar
+      mt_kahypar_initialize_thread_pool(
+        std::thread::hardware_concurrency() /* multi-thread has bug??? */,
+        true /* activate interleaved NUMA allocation policy */ ); 
     }
 
     ~Timer() {
       
-      std::cerr << "build_cands_runtime : " << build_cands_runtime << "\n";
-      std::cerr << "cluster_runtime : " << cluster_runtime << "\n";
-      std::cerr << "partition_runtime : " << partition_runtime << "\n";
-      std::cerr << "process_cluster_runtime : " << process_cluster_runtime << "\n";
-      std::cerr << "partitioned_execution_runtime : " << execution_runtime << "\n";
+      std::cout << "build_cands_runtime : " << build_cands_runtime << "\n";
+      std::cout << "cluster_runtime : " << cluster_runtime << "\n";
+      std::cout << "partition_runtime : " << partition_runtime << "\n";
+      std::cout << "process_cluster_runtime : " << process_cluster_runtime << "\n";
+      std::cout << "partitioned_execution_runtime : " << execution_runtime << "\n";
+      std::cout << "--------------------------------\n\n";
     }
 
     // Builder
@@ -154,9 +157,11 @@ class Timer {
   private:
 
     mutable std::shared_mutex _mutex;
-
+    
     tf::Taskflow _taskflow;
-    tf::Executor _executor;
+    // num threads
+    size_t _num_threads = std::thread::hardware_concurrency();
+    tf::Executor _executor{_num_threads};
 
     int _state {0};
     
@@ -337,7 +342,8 @@ class Timer {
     inline auto _remove_state(int = 0);
 
     // --------------------------------RepCut Implementation--------------------------------------------------------
- 
+
+
     // build_cands_runtime
     size_t build_cands_runtime = 0;
     
@@ -382,7 +388,7 @@ class Timer {
     std::vector<std::vector<Pin*>> _btopo_partitioned_pins;
 
     // mt-kahypar partition parameters
-    const mt_kahypar_partition_id_t _set_num_partition = 16; // number of partitions 
+    mt_kahypar_partition_id_t _set_num_partition = 20; // number of partitions 
     const double _im = 0.03; // imbalance parameter
 
     // cluster the taskflow graph
@@ -424,6 +430,9 @@ class Timer {
 
     // helper: comparator for std::vector<uint32_t>, if a < b, return true
     bool _comp_uint32_vector(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b);
+
+    // helper: get overlap profile
+    void _get_overlap_profile();
     // --------------------------------RepCut Implementation--------------------------------------------------------
 };
 

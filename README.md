@@ -7,3 +7,8 @@
 5/23
 1. Try to add num\_partitions and num\_threads as options to ot-shell for experiments
 2. Wrote exp.sh
+
+5/24
+1. add exp.py in ./benchmark for experiments
+2. need to fix libmtkahypar linker error
+3. vector<uint32_t> to string in getting pin\_clusters takes too much time. need to fix it. Also, can I use better method than unordered\_map?

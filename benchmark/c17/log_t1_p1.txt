@@ -1,0 +1,113 @@
+*******************thread = 1, partition = 1, circuit: c17*******************
+--------------------------------
+number of replication ftasks: 0
+number of ftotal tasks: 25
+ftask replication rate: 0%
+number of replication btasks: 0
+number of btotal tasks: 25
+btask replication rate: 0%
+_set_num_partition: 1
+_num_threads: 1
+build_cands_runtime : 5
+cluster_runtime : 10
+partition_runtime : 4156
+process_cluster_runtime : 3
+partitioned_execution_runtime : 107
+--------------------------------
+
+--------------------------------
+number of replication ftasks: 0
+number of ftotal tasks: 25
+ftask replication rate: 0%
+number of replication btasks: 0
+number of btotal tasks: 25
+btask replication rate: 0%
+_set_num_partition: 1
+_num_threads: 1
+build_cands_runtime : 6
+cluster_runtime : 10
+partition_runtime : 5776
+process_cluster_runtime : 3
+partitioned_execution_runtime : 186
+--------------------------------
+
+--------------------------------
+number of replication ftasks: 0
+number of ftotal tasks: 25
+ftask replication rate: 0%
+number of replication btasks: 0
+number of btotal tasks: 25
+btask replication rate: 0%
+_set_num_partition: 1
+_num_threads: 1
+build_cands_runtime : 6
+cluster_runtime : 13
+partition_runtime : 6689
+process_cluster_runtime : 3
+partitioned_execution_runtime : 321
+--------------------------------
+
+--------------------------------
+number of replication ftasks: 0
+number of ftotal tasks: 25
+ftask replication rate: 0%
+number of replication btasks: 0
+number of btotal tasks: 25
+btask replication rate: 0%
+_set_num_partition: 1
+_num_threads: 1
+build_cands_runtime : 5
+cluster_runtime : 10
+partition_runtime : 5420
+process_cluster_runtime : 3
+partitioned_execution_runtime : 118
+--------------------------------
+
+--------------------------------
+number of replication ftasks: 0
+number of ftotal tasks: 25
+ftask replication rate: 0%
+number of replication btasks: 0
+number of btotal tasks: 25
+btask replication rate: 0%
+_set_num_partition: 1
+_num_threads: 1
+build_cands_runtime : 6
+cluster_runtime : 11
+partition_runtime : 4336
+process_cluster_runtime : 3
+partitioned_execution_runtime : 150
+--------------------------------
+
+--------------------------------
+number of replication ftasks: 0
+number of ftotal tasks: 25
+ftask replication rate: 0%
+number of replication btasks: 0
+number of btotal tasks: 25
+btask replication rate: 0%
+_set_num_partition: 1
+_num_threads: 1
+build_cands_runtime : 9
+cluster_runtime : 19
+partition_runtime : 6946
+process_cluster_runtime : 5
+partitioned_execution_runtime : 69
+--------------------------------
+
+--------------------------------
+number of replication ftasks: 0
+number of ftotal tasks: 25
+ftask replication rate: 0%
+number of replication btasks: 0
+number of btotal tasks: 25
+btask replication rate: 0%
+_set_num_partition: 1
+_num_threads: 1
+build_cands_runtime : 8
+cluster_runtime : 19
+partition_runtime : 12359
+process_cluster_runtime : 4
+partitioned_execution_runtime : 101
+--------------------------------
+

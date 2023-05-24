@@ -1,0 +1,1 @@
+/usr/bin/c++  -Wall -O2 CMakeFiles/ot-tau18.dir/main/tau18/tau18.cpp.o -o ../bin/ot-tau18  ../lib/libOpenTimer.a -lmtkahypar 

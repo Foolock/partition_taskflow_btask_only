@@ -1,0 +1,1 @@
+/usr/bin/c++  -Wall -O2 CMakeFiles/utility.dir/unittest/utility.cpp.o -o ../unittest/utility  ../lib/libOpenTimer.a -lmtkahypar 

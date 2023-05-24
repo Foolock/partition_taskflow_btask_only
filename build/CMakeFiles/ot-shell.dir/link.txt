@@ -1,0 +1,1 @@
+/usr/bin/c++  -Wall -O2 CMakeFiles/ot-shell.dir/main/shell/shell.cpp.o -o ../bin/ot-shell  ../lib/libOpenTimer.a -lmtkahypar 

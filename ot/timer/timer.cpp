@@ -1749,6 +1749,7 @@ void Timer::_cluster_graph() {
 
 void Timer::_get_pin_clusters() {
  
+  /*
   for(auto pin : _bprop_cands) {
     pin->_bcone_id_string = _uint32_to_string(pin->_bcone_id); 
   }
@@ -1769,7 +1770,40 @@ void Timer::_get_pin_clusters() {
   for(const auto& [cone_string, pins] : fmap) {
     _fpin_clusters.push_back(pins);
   }
-  
+  */
+
+  auto start = std::chrono::steady_clock::now();
+    for(auto pin : _bprop_cands) {
+          pin->_bcone_id_string = _uint32_to_string(pin->_bcone_id);
+            }
+      for(auto pin : _fprop_cands) {
+            pin->_fcone_id_string = _uint32_to_string(pin->_fcone_id);
+              }
+        auto end = std::chrono::steady_clock::now();
+          string_to_int_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
+
+            std::unordered_map<std::string, std::vector<Pin*>> bmap;
+              std::unordered_map<std::string, std::vector<Pin*>> fmap;
+                start = std::chrono::steady_clock::now();
+                  for(const auto& pin : _bprop_cands) {
+                        bmap[pin->_bcone_id_string].push_back(pin);
+                          }
+                    for(const auto& pin : _fprop_cands) {
+                          fmap[pin->_fcone_id_string].push_back(pin);
+                            }
+                      end = std::chrono::steady_clock::now();
+                        hash_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
+
+                          start = std::chrono::steady_clock::now();
+                            for(const auto& [cone_string, pins] : bmap) {
+                                  _bpin_clusters.push_back(pins);
+                                    }
+                              for(const auto& [cone_string, pins] : fmap) {
+                                    _fpin_clusters.push_back(pins);
+                                      }
+                                end = std::chrono::steady_clock::now();
+                                  hash_to_vector_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
+
   /*
   // traverse bprop_cands to fill up _pin_clusters
   std::vector<std::vector<uint32_t>> bvisited_cone;

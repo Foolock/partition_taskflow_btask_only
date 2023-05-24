@@ -42,10 +42,6 @@ class Timer {
   public:
    
     Timer() {
-
-//      std::cout << "_set_num_partition: " << _set_num_partition << "\n";
-//      std::cout << "_num_threads: " << _num_threads << "\n";
-
       // Initialize thread pool for mt-kahypar
       mt_kahypar_initialize_thread_pool(
         std::thread::hardware_concurrency() /* multi-thread has bug??? */,
@@ -54,12 +50,25 @@ class Timer {
 
     ~Timer() {
       
+//      std::cout << "_set_num_partition: " << _set_num_partition << "\n";
+//      std::cout << "_num_threads: " << _executor.num_workers() << "\n";
+//      std::cout << "build_cands_runtime : " << build_cands_runtime << "\n";
+//      std::cout << "cluster_runtime : " << cluster_runtime << "\n";
+//      std::cout << "partition_runtime : " << partition_runtime << "\n";
+//      std::cout << "process_cluster_runtime : " << process_cluster_runtime << "\n";
+//      std::cout << "partitioned_execution_runtime : " << execution_runtime << "\n";
+//      std::cout << "--------------------------------\n\n";
+    
+
       std::cout << "build_cands_runtime : " << build_cands_runtime << "\n";
-      std::cout << "cluster_runtime : " << cluster_runtime << "\n";
-      std::cout << "partition_runtime : " << partition_runtime << "\n";
-      std::cout << "process_cluster_runtime : " << process_cluster_runtime << "\n";
-      std::cout << "partitioned_execution_runtime : " << execution_runtime << "\n";
-      std::cout << "--------------------------------\n\n";
+            std::cout << "cluster_runtime : " << cluster_runtime << "\n";
+                  std::cout << "partition_runtime : " << partition_runtime << "\n";
+                        std::cout << "process_cluster_runtime : " << process_cluster_runtime << "\n";
+                              std::cout << "partitioned_execution_runtime : " << execution_runtime << "\n";
+                                    std::cout << "string_to_int_runtime : " << string_to_int_runtime << "\n";
+                                          std::cout << "hash_runtime : " << hash_runtime << "\n";
+                                                std::cout << "hash_to_vector_runtime : " << hash_to_vector_runtime << "\n";
+                                                      std::cout << "--------------------------------\n\n";
     }
 
     // Builder
@@ -159,9 +168,7 @@ class Timer {
     mutable std::shared_mutex _mutex;
     
     tf::Taskflow _taskflow;
-    // num threads
-    size_t _num_threads = std::thread::hardware_concurrency();
-    tf::Executor _executor{_num_threads};
+    tf::Executor _executor{std::thread::hardware_concurrency()};
 
     int _state {0};
     
@@ -343,6 +350,15 @@ class Timer {
 
     // --------------------------------RepCut Implementation--------------------------------------------------------
 
+
+    // string to int time
+        size_t string_to_int_runtime = 0;
+    
+            // hash map time
+                size_t hash_runtime = 0;
+    
+                    // hashmap to 2dvector  time
+                        size_t hash_to_vector_runtime = 0;
 
     // build_cands_runtime
     size_t build_cands_runtime = 0;

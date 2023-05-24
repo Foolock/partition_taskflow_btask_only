@@ -1638,20 +1638,16 @@ void Timer::_cluster_graph() {
    * ----------------------------------------------------
    */
 
+
+  auto start = std::chrono::steady_clock::now();
   // assign fixed length to cone_id for each pin
   size_t length = _bsink_pins.size() / 32 + 1;
   for(auto pin : _bprop_cands) {
-    for(size_t i=0; i<length; i++) {
-      pin->_bcone_id.push_back(0);
-    }
+//    for(size_t i=0; i<length; i++) {
+//      pin->_bcone_id.push_back(0);
+//    }
+    pin->_bcone_id.resize(length);
   }
-  length = _fsink_pins.size() / 32 + 1;
-  for(auto pin : _fprop_cands) {
-    for(size_t i=0; i<length; i++) {
-      pin->_fcone_id.push_back(0);
-    }
-  }
-
   // assign cone_id to each sink pins
   int leftshift_count = 0; // counter of how many bit to left shift
   int next_uint = 0; // counter to indicate which uint to left shift
@@ -1666,6 +1662,17 @@ void Timer::_cluster_graph() {
       leftshift_count ++;
     }
   }
+  auto end = std::chrono::steady_clock::now();
+	assign_bcone_id_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
+
+  start = std::chrono::steady_clock::now();
+  length = _fsink_pins.size() / 32 + 1;
+  for(auto pin : _fprop_cands) {
+//    for(size_t i=0; i<length; i++) {
+//      pin->_fcone_id.push_back(0);
+//    }
+    pin->_fcone_id.resize(length);
+  }
   leftshift_count = 0; // counter of how many bit to left shift
   next_uint = 0; // counter to indicate which uint to left shift
   for(auto pin : _fsink_pins) {
@@ -1679,6 +1686,8 @@ void Timer::_cluster_graph() {
       leftshift_count ++;
     }
   }
+  end = std::chrono::steady_clock::now();
+	assign_fcone_id_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
 
   /*
    * ----------------------------------------------------

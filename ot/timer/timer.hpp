@@ -61,14 +61,16 @@ class Timer {
     
 
       std::cout << "build_cands_runtime : " << build_cands_runtime << "\n";
-            std::cout << "cluster_runtime : " << cluster_runtime << "\n";
-                  std::cout << "partition_runtime : " << partition_runtime << "\n";
-                        std::cout << "process_cluster_runtime : " << process_cluster_runtime << "\n";
-                              std::cout << "partitioned_execution_runtime : " << execution_runtime << "\n";
-                                    std::cout << "string_to_int_runtime : " << string_to_int_runtime << "\n";
-                                          std::cout << "hash_runtime : " << hash_runtime << "\n";
-                                                std::cout << "hash_to_vector_runtime : " << hash_to_vector_runtime << "\n";
-                                                      std::cout << "--------------------------------\n\n";
+      std::cout << "cluster_runtime : " << cluster_runtime << "\n";
+      std::cout << "partition_runtime : " << partition_runtime << "\n";
+      std::cout << "process_cluster_runtime : " << process_cluster_runtime << "\n";
+      std::cout << "partitioned_execution_runtime : " << execution_runtime << "\n";
+      std::cout << "string_to_int_runtime : " << string_to_int_runtime << "\n";
+      std::cout << "hash_runtime : " << hash_runtime << "\n";
+      std::cout << "hash_to_vector_runtime : " << hash_to_vector_runtime << "\n";
+      std::cout << "assign_fcone_id_runtime : " << assign_fcone_id_runtime << "\n";
+      std::cout << "assign_bcone_id_runtime : " << assign_bcone_id_runtime << "\n";
+      std::cout << "--------------------------------\n\n";
     }
 
     // Builder
@@ -352,19 +354,23 @@ class Timer {
 
 
     // string to int time
-        size_t string_to_int_runtime = 0;
+    size_t string_to_int_runtime = 0;
     
-            // hash map time
-                size_t hash_runtime = 0;
+    // hash map time
+    size_t hash_runtime = 0;
     
-                    // hashmap to 2dvector  time
-                        size_t hash_to_vector_runtime = 0;
+    // hashmap to 2dvector  time
+    size_t hash_to_vector_runtime = 0;
 
     // build_cands_runtime
     size_t build_cands_runtime = 0;
     
     // cluster_runtime
     size_t cluster_runtime = 0;
+
+    // assign cone_id runtime
+    size_t assign_fcone_id_runtime = 0;
+    size_t assign_bcone_id_runtime = 0;
 
     // process cluster time
     size_t process_cluster_runtime = 0;

@@ -227,6 +227,9 @@ class Pin {
     std::vector<uint32_t> _fcone_id;
     std::vector<uint32_t> _bcone_id;
 
+    size_t _fcone_size_t;
+    size_t _bcone_size_t;
+
     // similar concept as cone_id, each bit stands for 1 partition, so it can represent 32 partitions as most
     uint32_t _fpartition_id {0};
     uint32_t _bpartition_id {0};

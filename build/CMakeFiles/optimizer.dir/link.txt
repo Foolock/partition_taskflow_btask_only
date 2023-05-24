@@ -1,1 +1,0 @@
-/usr/bin/c++  -Wall -O2 CMakeFiles/optimizer.dir/example/optimizer/optimizer.cpp.o -o ../example/optimizer/optimizer  ../lib/libOpenTimer.a -lmtkahypar 

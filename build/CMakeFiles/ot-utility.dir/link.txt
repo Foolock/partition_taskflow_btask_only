@@ -1,1 +1,0 @@
-/usr/bin/c++  -Wall -O2 CMakeFiles/ot-utility.dir/main/utility/utility.cpp.o -o ../bin/ot-utility  ../lib/libOpenTimer.a -lmtkahypar 

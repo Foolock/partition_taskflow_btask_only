@@ -12,3 +12,4 @@
 1. add exp.py in ./benchmark for experiments
 2. need to fix libmtkahypar linker error
 3. vector<uint32_t> to string in getting pin\_clusters takes too much time. need to fix it. Also, can I use better method than unordered\_map?
+4. I tried do clustering without transfer vector(uint32) to string and use vector<uint32> as key, and use a customized hash function to make unordered\_map works. The speedup was limited(goes from 60s to 47s).

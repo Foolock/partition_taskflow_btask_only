@@ -449,6 +449,9 @@ class Timer {
 
     // helper: get overlap profile
     void _get_overlap_profile();
+
+    // helper: transfer cone_id to a size_t
+    size_t _cone_id_to_size_t(const std::vector<uint32_t>& cone_id);
     // --------------------------------RepCut Implementation--------------------------------------------------------
 };
 

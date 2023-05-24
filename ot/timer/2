@@ -4,18 +4,6 @@
 
 namespace ot {
 
-
-  struct VectorHasher {
-    int operator()(const std::vector<uint32_t> &V) const {
-        int hash = V.size();
-        for(auto &i : V) {
-            hash ^= i + 0x9e3779b9 + (hash << 6) + (hash >> 2);
-        }
-        return hash;
-    }
-};
-
-
 //
 //Pin pin;
 //PIN_STATUS stat;
@@ -1784,38 +1772,26 @@ void Timer::_get_pin_clusters() {
   }
   */
 
-  /*
   auto start = std::chrono::steady_clock::now();
   for(auto pin : _bprop_cands) {
-//    pin->_bcone_id_string = _uint32_to_string(pin->_bcone_id);
-//    pin->_bcone_size_t = _cone_id_to_size_t(pin->_bcone_id); 
+    pin->_bcone_id_string = _uint32_to_string(pin->_bcone_id);
   }
   for(auto pin : _fprop_cands) {
-//    pin->_fcone_id_string = _uint32_to_string(pin->_fcone_id);
-//    pin->_fcone_size_t = _cone_id_to_size_t(pin->_fcone_id); 
+    pin->_fcone_id_string = _uint32_to_string(pin->_fcone_id);
   }
   auto end = std::chrono::steady_clock::now();
   string_to_int_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
-  */
 
-//  std::unordered_map<std::string, std::vector<Pin*>> bmap;
-//  std::unordered_map<std::string, std::vector<Pin*>> fmap;
-//  std::unordered_map<size_t, std::vector<Pin*>> bmap;
-//  std::unordered_map<size_t, std::vector<Pin*>> fmap;
-  std::unordered_map<std::vector<uint32_t>, std::vector<Pin*>, VectorHasher> bmap;
-  std::unordered_map<std::vector<uint32_t>, std::vector<Pin*>, VectorHasher> fmap;
-  auto start = std::chrono::steady_clock::now();
+  std::unordered_map<std::string, std::vector<Pin*>> bmap;
+  std::unordered_map<std::string, std::vector<Pin*>> fmap;
+  start = std::chrono::steady_clock::now();
   for(const auto& pin : _bprop_cands) {
-//    bmap[pin->_bcone_id_string].push_back(pin);
-//    bmap[pin->_bcone_size_t].push_back(pin);
-    bmap[pin->_bcone_id].push_back(pin);
+    bmap[pin->_bcone_id_string].push_back(pin);
   }
   for(const auto& pin : _fprop_cands) {
-//    fmap[pin->_fcone_id_string].push_back(pin);
-//    fmap[pin->_fcone_size_t].push_back(pin);
-    fmap[pin->_fcone_id].push_back(pin);
+    fmap[pin->_fcone_id_string].push_back(pin);
   }
-  auto end = std::chrono::steady_clock::now();
+  end = std::chrono::steady_clock::now();
   hash_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
 
   start = std::chrono::steady_clock::now();
@@ -2835,12 +2811,7 @@ void Timer::_get_overlap_profile() {
 
 size_t Timer::_cone_id_to_size_t(const std::vector<uint32_t>& cone_id) {
 
-  size_t result = 0;
-  for(const auto& num : cone_id) {
-    result = result * 2 + num;
-  }
-
-  return result;
+  
 
 }
 

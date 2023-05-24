@@ -1,1 +1,0 @@
-/usr/bin/c++  -Wall -O2 CMakeFiles/simple.dir/example/simple/simple.cpp.o -o ../example/simple/simple  ../lib/libOpenTimer.a -lmtkahypar 

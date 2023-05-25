@@ -1056,9 +1056,9 @@ void Timer::_update_timing() {
   // get partitions 
   start = std::chrono::steady_clock::now(); 
   std::cout.setstate(std::ios_base::failbit);
-  _get_fpartitions();
+//  _get_fpartitions();
   _get_bpartitions();
-  _assign_fpartitions();
+//  _assign_fpartitions();
   _assign_bpartitions();
   std::cout.clear();
   end = std::chrono::steady_clock::now();
@@ -1070,6 +1070,7 @@ void Timer::_update_timing() {
   // build partitioned taskflow
   _taskflow.clear();
   _build_partitioned_taskflow();
+  _taskflow.dump(std::cout);
 
   // get overlap profile
   _get_overlap_profile();
@@ -2670,20 +2671,20 @@ void Timer::_get_topo_order() {
   */
 
   mt_kahypar_partition_id_t num_partition = _set_num_partition;
-  if(num_partition > _fsink_pins.size()) {
-    num_partition = _fsink_pins.size();
-  }
-  for(int i=0; i<num_partition; i++) {
-    std::vector<Pin*> one_partition_pins;
-    uint32_t scan = 1 << i;
-    for(auto pin : _fprop_cands) {
-      if((pin->_fpartition_id & scan) == scan) {
-        one_partition_pins.push_back(pin);
-      }
-    }
-    _ftopo_partitioned_pins.push_back(one_partition_pins);
-  }
-
+//  if(num_partition > _fsink_pins.size()) {
+//    num_partition = _fsink_pins.size();
+//  }
+//  for(int i=0; i<num_partition; i++) {
+//    std::vector<Pin*> one_partition_pins;
+//    uint32_t scan = 1 << i;
+//    for(auto pin : _fprop_cands) {
+//      if((pin->_fpartition_id & scan) == scan) {
+//        one_partition_pins.push_back(pin);
+//      }
+//    }
+//    _ftopo_partitioned_pins.push_back(one_partition_pins);
+//  }
+//
   num_partition = _set_num_partition;
   if(num_partition > _bsink_pins.size()) {
     num_partition = _bsink_pins.size();
@@ -2705,11 +2706,11 @@ void Timer::_get_topo_order() {
       pin->_isbRep = true;
     }
   }
-  for(auto pin : _fprop_cands) {
-    if(_popcount(pin->_fpartition_id) > 1) {
-      pin->_isfRep = true;
-    }
-  }
+//  for(auto pin : _fprop_cands) {
+//    if(_popcount(pin->_fpartition_id) > 1) {
+//      pin->_isfRep = true;
+//    }
+//  }
 }
 
 void Timer::_execute_task_manually() {
@@ -2808,20 +2809,43 @@ void Timer::_build_partitioned_taskflow() {
     index++;
   }
 
-  tf::Task sync_task= _taskflow.placeholder();
+//  for(auto& pin_vec : _btopo_partitioned_pins) {
+//    std::cerr << "pin_vec[0] name: " << pin_vec[0]->_name << "\n";
+//  }
+//  for(size_t i=0; i<_btopo_partitioned_pins.size(); i++) {
+//    std::cerr << "pin_vec[0] name: " << _btopo_partitioned_pins[i][0]->_name << "\n";
+//  }
+
+//  tf::Task sync_task= _taskflow.placeholder();
 //  for(size_t i=0; i<_ftopo_partitioned_pins.size(); i++) {
 //    ftask[i].precede(sync_task);
 //  }
 
-  for(auto pin : _fprop_cands) {
-    if(pin->_ftask && pin->_ftask->num_successors() == 0) {
-      pin->_ftask->precede(sync_task);
-    }
-  }
+//  for(auto pin : _fprop_cands) {
+//    if(pin->_ftask && pin->_ftask->num_successors() == 0) {
+//      pin->_ftask->precede(sync_task);
+//    }
+//  }
 
+  /*
+   * traverse _btopo_partitioned_pins, for each partition in _btopo_partitioned_pins
+   * traverse each partition, if pin->_fanout.size() = 0
+   * then this pin belongs to _fsink_pins. So we need to make sure this pin->_ftask is done before
+   * this partition happen, this means
+   * pin->_ftask->precede(btask[i]);
+   */
   for(size_t i=0; i<_btopo_partitioned_pins.size(); i++) {
-    btask[i].succeed(sync_task);
-  }
+    for(size_t j=0; j<_btopo_partitioned_pins[i].size(); j++) {
+      if(_btopo_partitioned_pins[i][j]->_fanout.size() == 0) {
+        _btopo_partitioned_pins[i][j]->_ftask->precede(btask[i]);
+      }
+    }
+  }  
+
+
+//  for(size_t i=0; i<_btopo_partitioned_pins.size(); i++) {
+//    btask[i].succeed(sync_task);
+//  }
 }
 
 void Timer::_reset_repcut() {

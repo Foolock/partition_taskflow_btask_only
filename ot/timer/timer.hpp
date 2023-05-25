@@ -50,16 +50,17 @@ class Timer {
 
     ~Timer() {
       
-//      std::cout << "_set_num_partition: " << _set_num_partition << "\n";
-//      std::cout << "_num_threads: " << _executor.num_workers() << "\n";
-//      std::cout << "build_cands_runtime : " << build_cands_runtime << "\n";
-//      std::cout << "cluster_runtime : " << cluster_runtime << "\n";
-//      std::cout << "partition_runtime : " << partition_runtime << "\n";
-//      std::cout << "process_cluster_runtime : " << process_cluster_runtime << "\n";
-//      std::cout << "partitioned_execution_runtime : " << execution_runtime << "\n";
-//      std::cout << "--------------------------------\n\n";
+      std::cout << "_set_num_partition: " << _set_num_partition << "\n";
+      std::cout << "_num_threads: " << _executor.num_workers() << "\n";
+      std::cout << "build_cands_runtime : " << build_cands_runtime << "\n";
+      std::cout << "cluster_runtime : " << cluster_runtime << "\n";
+      std::cout << "partition_runtime : " << partition_runtime << "\n";
+      std::cout << "process_cluster_runtime : " << process_cluster_runtime << "\n";
+      std::cout << "partitioned_execution_runtime : " << execution_runtime << "\n";
+      std::cout << "--------------------------------\n\n";
     
 
+      /*
       std::cout << "build_cands_runtime : " << build_cands_runtime << "\n";
       std::cout << "cluster_runtime : " << cluster_runtime << "\n";
       std::cout << "partition_runtime : " << partition_runtime << "\n";
@@ -71,6 +72,7 @@ class Timer {
       std::cout << "assign_fcone_id_runtime : " << assign_fcone_id_runtime << "\n";
       std::cout << "assign_bcone_id_runtime : " << assign_bcone_id_runtime << "\n";
       std::cout << "--------------------------------\n\n";
+      */
     }
 
     // Builder
@@ -429,6 +431,10 @@ class Timer {
     void _get_fpartitions();
     void _get_bpartitions();
     
+    // assign partitions
+    void _assign_fpartitions();
+    void _assign_bpartitions();
+
     // process clusters: classify clusters into node and edge clusters and get their weights
     void _process_clusters();
 

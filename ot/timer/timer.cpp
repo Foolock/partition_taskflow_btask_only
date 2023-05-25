@@ -1058,6 +1058,8 @@ void Timer::_update_timing() {
   std::cout.setstate(std::ios_base::failbit);
   _get_fpartitions();
   _get_bpartitions();
+  _assign_fpartitions();
+  _assign_bpartitions();
   std::cout.clear();
   end = std::chrono::steady_clock::now();
   partition_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
@@ -1066,6 +1068,7 @@ void Timer::_update_timing() {
   _get_topo_order();
 
   // build partitioned taskflow
+  _taskflow.clear();
   _build_partitioned_taskflow();
 
   // get overlap profile
@@ -2284,8 +2287,58 @@ void Timer::_get_fpartitions() {
     mt_kahypar_free_hypergraph(hypergraph);
     mt_kahypar_free_partitioned_hypergraph(partitioned_hg);
   }
+  }
+
+void Timer::_assign_fpartitions() {
+
   /* ----------------------------------------------------
-   * append partition results to partition_id of each pin 
+   * append partition results to partition_id of each pin: append _bpartition results 
+   * ----------------------------------------------------
+   */
+  /*
+  std::cerr << "check _bnode_clusters: \n";
+  for(const auto& cluster : _bnode_clusters) {
+    for(auto pin : cluster) {
+      std::cerr << pin->_name << " "; 
+    }
+    std::cerr << "\n";
+  }
+
+  // assign partition_id for pins in node cluster
+  for(size_t i=0; i<_bnode_clusters.size(); i++) {
+    int partition_id = _bpartition[i]; // here partition_id is left_shift_count
+    _bnode_clusters[i][0]->_fpartition_id = 1 << partition_id;
+  }
+  // finish assigning partition_id for pins in node_clusters
+  for(const auto& cluster : _bnode_clusters) {
+    if(cluster.size() > 1) {
+      for(size_t i=1; i<cluster.size(); i++) {
+        // notice that here pins in _fprop_cands will also be assigned with _bpartition_id
+        cluster[i]->_fpartition_id = cluster[i-1]->_fpartition_id;
+      }
+    }
+  }
+  // reversely traverse _bprop_cands to assign _bpartition_id for each pin
+  for(auto it = _bprop_cands.rbegin(); it != _bprop_cands.rend(); ++it) {
+    // assign the dependent pins with bpartition_id of current pin
+    for(auto arc : (*it)->_fanout) {
+      Pin* to = &(arc->_to);
+      if(to->_has_state(Pin::BPROP_CAND)) {
+        to->_fpartition_id = to->_fpartition_id | (*it)->_fpartition_id;
+      }
+    }
+  } 
+
+  std::cerr << "check _fpartition_id:\n";
+  for(auto pin : _bprop_cands) {
+    std::cerr << pin->_name << " ";
+    _bin_uint32(pin->_fpartition_id);
+    std::cerr << "\n";
+  } 
+  */
+
+  /* ----------------------------------------------------
+   * append partition results to partition_id of each pin
    * ----------------------------------------------------
    */
   // assign partition_id for pins in node cluster
@@ -2541,6 +2594,10 @@ void Timer::_get_bpartitions() {
     mt_kahypar_free_hypergraph(hypergraph);
     mt_kahypar_free_partitioned_hypergraph(partitioned_hg);
   }
+}
+
+void Timer::_assign_bpartitions() {
+
   /* ----------------------------------------------------
    * append partition results to partition_id of each pin
    * ----------------------------------------------------
@@ -2569,6 +2626,13 @@ void Timer::_get_bpartitions() {
       }
     }
   }
+
+//  std::cerr << "check _bpartition_id:\n";
+//  for(auto pin : _bprop_cands) {
+//    std::cerr << pin->_name << " ";
+//    _bin_uint32(pin->_bpartition_id);
+//    std::cerr << "\n";
+//  } 
 }
 
 void Timer::_get_topo_order() {
@@ -2578,7 +2642,33 @@ void Timer::_get_topo_order() {
    * we need to scan _partition.size() times, start traversing from fprop cuz we need top-down order 
    * _bprop_cands and _fprop_cands are already topologically sorted from top to bottom in taskflow
    * once found a pin belongs to a partition, store it into a std::vector<std::vector<Pin*>> _topo_partitioned_pins
+   * use only _bpartition results
    */
+  /*
+  mt_kahypar_partition_id_t num_partition = _set_num_partition;
+  if(num_partition > _bsink_pins.size()) {
+    num_partition = _bsink_pins.size();
+  }
+  for(int i=0; i<num_partition; i++) {
+    std::vector<Pin*> one_partition_pins;
+    uint32_t scan = 1 << i;
+    for(auto pin : _fprop_cands) {
+      if((pin->_fpartition_id & scan) == scan) {
+        one_partition_pins.push_back(pin);
+      }
+    }
+    _ftopo_partitioned_pins.push_back(one_partition_pins);
+  }
+
+  std::cerr << "_ftopo_partitioned_pins: \n";
+  for(const auto& partition : _ftopo_partitioned_pins) {
+    for(auto pin : partition) {
+      std::cerr << pin->_name << " ";
+    }
+    std::cerr << "\n\n";
+  }
+  */
+
   mt_kahypar_partition_id_t num_partition = _set_num_partition;
   if(num_partition > _fsink_pins.size()) {
     num_partition = _fsink_pins.size();
@@ -2638,38 +2728,66 @@ void Timer::_execute_task_manually() {
 
 void Timer::_build_partitioned_taskflow() {
 
-  std::vector<tf::Task> ftask(_ftopo_partitioned_pins.size());
-  std::vector<tf::Task> btask(_btopo_partitioned_pins.size());
-  int index = 0; 
-  for(auto& pin_vec : _ftopo_partitioned_pins) {
-    ftask[index] = _taskflow.emplace([this, &pin_vec] () {
-      for(auto pin : pin_vec) {
-        // do ftask
-        if(pin->_isfRep) {
-          int cur_task_status = 0;
-          if(pin->_ftask_status.compare_exchange_strong(cur_task_status, 1)) {
-            _fprop_rc_timing(*pin); // 5 typical tasks for a p to update timing in forward propagation // most time consuming if p has net
-            _fprop_slew(*pin);
-            _fprop_delay(*pin);
-            _fprop_at(*pin);
-            _fprop_test(*pin);
-            pin->_ftask_status.store(2, std::memory_order_release);  
-          }
-          else { while(pin->_ftask_status.load(std::memory_order_acquire) != 2) {} }
-        }
-        else {
-          _fprop_rc_timing(*pin); // 5 typical tasks for a p to update timing in forward propagation // most time consuming if p has net
-          _fprop_slew(*pin);
-          _fprop_delay(*pin);
-          _fprop_at(*pin);
-          _fprop_test(*pin); 
-        }
-      }
-    });
-    index++;
+  // Emplace the fprop task, this task is for each pin in the affected region
+  // (1) propagate the rc timing
+  // (2) propagate the slew
+  // (3) propagate the delay
+  // (4) propagate the arrival time.
+  for(auto pin : _fprop_cands) { // std::deque<Pin*> _fprop_cands;
+    assert(!pin->_ftask);
+    pin->_ftask = _taskflow.emplace([this, pin] () { // std::optional<tf::Task> _ftask; // std::optional 不用担心额外的动态内存分配 c++17
+      _fprop_rc_timing(*pin); // 5 typical tasks for a pin to update timing in forward propagation // most time consuming if pin has net
+      _fprop_slew(*pin);
+      _fprop_delay(*pin);
+      _fprop_at(*pin);
+      _fprop_test(*pin);
+    }).name(pin->_name);
   }
 
-  index = 0;
+  // Build the dependency, this is the forward part of the dependency graph
+  for(auto to : _fprop_cands) {
+    for(auto arc : to->_fanin) { // std::list<RctEdge*> _fanin;
+      if(arc->_has_state(Arc::LOOP_BREAKER)) {
+        continue;
+      }
+      if(auto& from = arc->_from; from._has_state(Pin::FPROP_CAND)) {
+        from._ftask->precede(to->_ftask.value());
+      }
+    }
+  }
+
+//  std::vector<tf::Task> ftask(_ftopo_partitioned_pins.size());
+  std::vector<tf::Task> btask(_btopo_partitioned_pins.size());
+//  int index = 0; 
+//  for(auto& pin_vec : _ftopo_partitioned_pins) {
+//    ftask[index] = _taskflow.emplace([this, &pin_vec] () {
+//      for(auto pin : pin_vec) {
+//        // do ftask
+//        if(pin->_isfRep) {
+//          int cur_task_status = 0;
+//          if(pin->_ftask_status.compare_exchange_strong(cur_task_status, 1)) {
+//            _fprop_rc_timing(*pin); // 5 typical tasks for a p to update timing in forward propagation // most time consuming if p has net
+//            _fprop_slew(*pin);
+//            _fprop_delay(*pin);
+//            _fprop_at(*pin);
+//            _fprop_test(*pin);
+//            pin->_ftask_status.store(2, std::memory_order_release);  
+//          }
+//          else { while(pin->_ftask_status.load(std::memory_order_acquire) != 2) {} }
+//        }
+//        else {
+//          _fprop_rc_timing(*pin); // 5 typical tasks for a p to update timing in forward propagation // most time consuming if p has net
+//          _fprop_slew(*pin);
+//          _fprop_delay(*pin);
+//          _fprop_at(*pin);
+//          _fprop_test(*pin); 
+//        }
+//      }
+//    });
+//    index++;
+//  }
+
+  int index = 0;
   for(auto& pin_vec : _btopo_partitioned_pins) {
     btask[index] = _taskflow.emplace([this, &pin_vec] () {
       for(auto pin : pin_vec) {
@@ -2691,9 +2809,16 @@ void Timer::_build_partitioned_taskflow() {
   }
 
   tf::Task sync_task= _taskflow.placeholder();
-  for(size_t i=0; i<_ftopo_partitioned_pins.size(); i++) {
-    ftask[i].precede(sync_task);
+//  for(size_t i=0; i<_ftopo_partitioned_pins.size(); i++) {
+//    ftask[i].precede(sync_task);
+//  }
+
+  for(auto pin : _fprop_cands) {
+    if(pin->_ftask && pin->_ftask->num_successors() == 0) {
+      pin->_ftask->precede(sync_task);
+    }
   }
+
   for(size_t i=0; i<_btopo_partitioned_pins.size(); i++) {
     btask[i].succeed(sync_task);
   }
